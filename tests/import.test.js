@@ -130,7 +130,9 @@ test('re-import preserves annotations; upstream unstar keeps the local record', 
   assert.equal(after.annotation.status, 'dismissed');
 
   const keptAfter = getRepo(db, keptLocal);
-  assert.equal(keptAfter.description, 'changed upstream');
+  // Re-imports are additive: existing source metadata is NOT refreshed
+  // (GitHub quota is a budget; refresh is explicit).
+  assert.equal(keptAfter.description, 'A sample repository');
   assert.equal(keptAfter.annotation.reason, 'my reason');
   assert.equal(keptAfter.annotation.status, 'adopted');
   assert.equal(keptAfter.starredUpstream, true);

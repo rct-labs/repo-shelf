@@ -383,6 +383,41 @@ public sealed class JobManager
                     cancel.ThrowIfCancellationRequested();
                     try
                     {
+                        // Unstar reconciliation needs every seen id, cheap.
+                        lock (_store.Sync)
+                        {
+                            using var seen = _store.Conn.CreateCommand();
+                            seen.CommandText = "INSERT OR IGNORE INTO job_seen (job_id, github_id) VALUES ($job, $gid)";
+                            seen.Parameters.AddWithValue("$job", id);
+                            seen.Parameters.AddWithValue("$gid", meta.GithubId);
+                            seen.ExecuteNonQuery();
+                        }
+
+                        // Already in the library: skip. Re-imports are additive;
+                        // quota is spent only on repositories not yet stored.
+                        bool exists;
+                        lock (_store.Sync)
+                        {
+                            using var existsCmd = _store.Conn.CreateCommand();
+                            existsCmd.CommandText = "SELECT 1 FROM repos WHERE github_id = $gid";
+                            existsCmd.Parameters.AddWithValue("$gid", meta.GithubId);
+                            exists = existsCmd.ExecuteScalar() is not null;
+                        }
+                        if (exists)
+                        {
+                            // Local-only write: mark current star membership.
+                            lock (_store.Sync)
+                            {
+                                using var mark = _store.Conn.CreateCommand();
+                                mark.CommandText = "UPDATE repos SET starred_upstream = 1, seen_in_import = 1 WHERE github_id = $gid";
+                                mark.Parameters.AddWithValue("$gid", meta.GithubId);
+                                mark.ExecuteNonQuery();
+                            }
+                            p.Updated += 1;
+                            p.Processed += 1;
+                            continue;
+                        }
+
                         string? readme = null;
                         var readmeTruncated = false;
                         var readmeProvided = false;
@@ -411,14 +446,6 @@ public sealed class JobManager
                             }
                         }
                         var result = _repos.UpsertSource(meta, readmeProvided ? readme : null, readmeProvided, readmeTruncated, starred: true);
-                        lock (_store.Sync)
-                        {
-                            using var seen = _store.Conn.CreateCommand();
-                            seen.CommandText = "INSERT OR IGNORE INTO job_seen (job_id, github_id) VALUES ($job, $gid)";
-                            seen.Parameters.AddWithValue("$job", id);
-                            seen.Parameters.AddWithValue("$gid", meta.GithubId);
-                            seen.ExecuteNonQuery();
-                        }
                         if (result.Created) p.Added += 1; else p.Updated += 1;
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)

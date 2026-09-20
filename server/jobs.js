@@ -94,6 +94,20 @@ export function createJobManager({ db, gh, maxRateLimitWaitMs = 90_000, sleepImp
             return;
           }
           try {
+            // Unstar reconciliation needs every seen id, cheap.
+            db.prepare('INSERT OR IGNORE INTO job_seen (job_id, github_id) VALUES (?, ?)').run(id, meta.githubId);
+
+            // Already in the library: skip. Re-imports are additive; quota is
+            // spent only on repositories not yet stored.
+            const exists = db.prepare('SELECT 1 FROM repos WHERE github_id = ?').get(meta.githubId);
+            if (exists) {
+              // Local-only write: mark current star membership.
+              db.prepare('UPDATE repos SET starred_upstream = 1, seen_in_import = 1 WHERE github_id = ?').run(meta.githubId);
+              updated += 1;
+              processed += 1;
+              continue;
+            }
+
             let readme;
             let readmeTruncated = 0;
             if (includeReadme && !readmeRateLimited) {
@@ -113,7 +127,6 @@ export function createJobManager({ db, gh, maxRateLimitWaitMs = 90_000, sleepImp
               }
             }
             const result = upsertSource(db, meta, { readme, readmeTruncated, starred: 1 });
-            db.prepare('INSERT OR IGNORE INTO job_seen (job_id, github_id) VALUES (?, ?)').run(id, meta.githubId);
             if (result.created) added += 1; else updated += 1;
           } catch (err) {
             failed += 1;

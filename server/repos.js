@@ -9,7 +9,6 @@ import { STATUSES } from './db.js';
 
 export const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const INDEX_TEXT_LIMIT = 200_000;
-const FRESH_ENOUGH_MS = 5 * 60 * 1000;
 
 const now = () => new Date().toISOString();
 
@@ -232,20 +231,10 @@ export async function saveRepo(db, gh, { url, reason = '', tags = [] } = {}) {
 
   const existing = findByFullName(db, parsed.fullName);
   if (existing) {
-    // Best-effort refresh when metadata is older than five minutes; a failed
-    // refresh never turns an already-saved record into an error.
-    let refreshed = false;
-    let refreshError = null;
-    if (!existing.fetchedAt || Date.now() - Date.parse(existing.fetchedAt) > FRESH_ENOUGH_MS) {
-      try {
-        await refreshRepo(db, gh, existing.id);
-        refreshed = true;
-      } catch (err) {
-        refreshError = err.code || 'error';
-      }
-    }
+    // Already in the library: never auto-refresh. GitHub quota is a budget;
+    // the user refreshes explicitly from the detail view.
     const annotationChanged = mergeAnnotationOnSave(db, existing.id, { reason, tags });
-    return { outcome: 'already_exists', repo: getRepo(db, existing.id), refreshed, refreshError, annotationChanged };
+    return { outcome: 'already_exists', repo: getRepo(db, existing.id), refreshed: false, refreshError: null, annotationChanged };
   }
 
   let meta;

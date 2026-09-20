@@ -62,6 +62,10 @@ Saving must never require AI credentials or force the user through classificatio
   archived status, last-push time, stars, default branch, README and fetch time.
 - Keep README text locally so search continues offline after initial sync.
 - Refresh source fields without overwriting personal notes, tags or status.
+- Re-imports are additive by design (owner decision): repositories already in
+  the library are skipped (star membership is still reconciled), so the GitHub
+  API quota is spent only on repos not yet stored. Source fields update only
+  through explicit refresh actions.
 - Unstarring upstream must not delete local records. Distinguish missing,
   inaccessible, stale and successfully refreshed records.
 - Handle rate limits and transient errors with bounded retries; honor server

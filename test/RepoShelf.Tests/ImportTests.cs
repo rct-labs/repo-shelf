@@ -136,7 +136,9 @@ public class ImportTests
         Assert.Equal("dismissed", after["annotation"]!["status"]!.GetValue<string>());
 
         var keptAfter = repos.GetRepo(LocalId(5))!;
-        Assert.Equal("changed upstream", keptAfter["description"]!.GetValue<string>());
+        // Re-imports are additive: existing source metadata is NOT refreshed
+        // (GitHub quota is a budget; refresh is explicit).
+        Assert.Equal("A sample repository", keptAfter["description"]!.GetValue<string>());
         Assert.Equal("my reason", keptAfter["annotation"]!["reason"]!.GetValue<string>());
         Assert.True(keptAfter["starredUpstream"]!.GetValue<bool>());
     }

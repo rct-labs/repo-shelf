@@ -31,7 +31,6 @@ public sealed class RepoService
 {
     public static readonly TimeSpan StaleAfter = TimeSpan.FromDays(7);
     private const int IndexTextLimit = 200_000;
-    private static readonly TimeSpan FreshEnough = TimeSpan.FromMinutes(5);
 
     private readonly Store _store;
     private readonly GitHubClient _gh;
@@ -374,33 +373,15 @@ public sealed class RepoService
         var existing = FindByFullName(parsed.FullName);
         if (existing is not null)
         {
-            var refreshed = false;
-            string? refreshError = null;
-            var fetchedAt = existing["fetchedAt"]?.GetValue<string>();
-            var staleForRefresh = fetchedAt is null || DateTime.UtcNow - DateTime.Parse(fetchedAt).ToUniversalTime() > FreshEnough;
-            if (staleForRefresh)
-            {
-                try
-                {
-                    await RefreshRepoAsync(existing["id"]!.GetValue<long>());
-                    refreshed = true;
-                }
-                catch (ServiceException ex)
-                {
-                    refreshError = ex.Code;
-                }
-                catch (GitHubException ex)
-                {
-                    refreshError = ex.Code;
-                }
-            }
+            // Already in the library: never auto-refresh. GitHub quota is a
+            // budget; the user refreshes explicitly from the detail view.
             var changed = MergeAnnotationOnSave(existing["id"]!.GetValue<long>(), reason, tags ?? new());
             return new JsonObject
             {
                 ["outcome"] = "already_exists",
                 ["repo"] = GetRepo(existing["id"]!.GetValue<long>()),
-                ["refreshed"] = refreshed,
-                ["refreshError"] = refreshError,
+                ["refreshed"] = false,
+                ["refreshError"] = null,
                 ["annotationChanged"] = changed,
             };
         }
