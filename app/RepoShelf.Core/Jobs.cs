@@ -185,6 +185,15 @@ public sealed class JobManager
                 cancel.ThrowIfCancellationRequested();
                 try
                 {
+                    // Already in the library: skip instead of refreshing, so a
+                    // resumed import spends API quota only on missing repos.
+                    var fullName = RepoUrlParser.Parse(url).FullName;
+                    if (_repos.FindByFullName(fullName) is not null)
+                    {
+                        p.Updated += 1;
+                        p.Processed += 1;
+                        continue;
+                    }
                     var result = await _repos.SaveRepoAsync(url);
                     if (result["outcome"]?.GetValue<string>() == "created") p.Added += 1; else p.Updated += 1;
                 }
