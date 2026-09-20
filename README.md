@@ -3,9 +3,10 @@
 Save an interesting GitHub repository in seconds, and find it later by what it
 does, why you saved it, and the project where you might use it.
 
-Repo Shelf is a **local-first personal repository library**: a small web
-application with a Chromium browser extension for capture. Your data lives in a
-local SQLite database — no cloud account, no AI service, no telemetry.
+Repo Shelf is a **local-first personal repository library**: a native Windows
+tray app (WPF + WebView2) with a built-in local service, plus a Chromium
+browser extension for capture. Your data lives in a local SQLite database —
+no cloud account, no AI service, no telemetry.
 
 ## Features
 
@@ -30,17 +31,50 @@ local SQLite database — no cloud account, no AI service, no telemetry.
 
 ## Requirements
 
-- Windows 10/11 (macOS/Linux work too, untested), Node.js **20+**, pnpm.
-- Chrome or Edge for the extension.
+- Windows 10/11, **.NET 10 desktop runtime** (already present if the .NET SDK
+  is installed), WebView2 runtime (preinstalled on Windows 11).
+- Chrome or Edge for the capture extension.
+- Development: .NET 10 SDK; Node.js 20+ with pnpm only for the optional
+  reference implementation and the browser smoke test.
 
-## Setup
+## Desktop app (primary)
+
+```powershell
+dotnet publish app/RepoShelf -c Release
+```
+
+The single-file executable lands in
+`app/RepoShelf/bin/Release/net10.0-windows/win-x64/publish/RepoShelf.exe`
+(~4 MB, framework-dependent — it uses the .NET 10 runtime installed on the
+machine). Double-click to run:
+
+- The local service starts in-process (loopback only, port 4790 by default).
+- A WebView2 window shows the library UI; closing the window keeps the app in
+  the **system tray** (double-click to reopen, right-click for the menu).
+- **Launch at login** is registered on first run (HKCU Run key) and can be
+  toggled from the tray menu.
+- A second launch simply focuses the running instance (named-mutex single
+  instance).
+
+Modes: `RepoShelf.exe --background` (service + tray, no window — used by the
+login entry), `RepoShelf.exe --service` (headless service only).
+
+For distribution to machines without .NET 10, publish self-contained instead
+(larger exe, zero prerequisites):
+
+```powershell
+dotnet publish app/RepoShelf -c Release -p:SelfContained=true
+```
+
+### Web UI / reference implementation (Node.js)
+
+The same UI and API also run as a plain web app (useful for development and
+for verifying the browser smoke test without the desktop shell):
 
 ```sh
 pnpm install
-pnpm start
+pnpm start          # http://127.0.0.1:4790
 ```
-
-Then open http://127.0.0.1:4790 in your browser.
 
 Durable data is stored outside the source tree:
 
@@ -92,12 +126,18 @@ directly.
 ## Development
 
 ```sh
-pnpm test         # unit + integration tests (no network needed)
-pnpm test:e2e     # real-browser smoke test (see below)
-pnpm perf         # 5,000-repo search latency measurement
+# .NET app (primary)
+dotnet build app/RepoShelf.slnx          # build
+dotnet test app/RepoShelf.slnx           # 69 unit/integration tests (hermetic)
+dotnet run --project tools/RepoShelf.PerfCheck -c Release   # 5,000-repo latency
+
+# Node reference implementation + browser smoke
+pnpm test                                # 56 unit/integration tests (hermetic)
+pnpm test:e2e                            # browser smoke against the Node service
+pnpm test:e2e:desktop                    # browser smoke against the published .NET exe
 ```
 
-`pnpm test:e2e` launches Playwright's Chromium build, loads the extension,
+`test:e2e*` launches Playwright's Chromium build, loads the extension,
 captures a repository through the popup, exercises the offline pending queue,
 and verifies search plus hostile-README sanitization in the UI. It uses the
 real public GitHub API, so it needs network access. Branded Chrome/Edge ≥ 137
@@ -107,10 +147,14 @@ does not affect manual installation in real Chrome/Edge.
 ## Project layout
 
 ```
-server/    local service (Node.js, ESM, no build step)
-public/    web UI (vanilla JS, bilingual)
-extension/ Manifest V3 capture extension
-tests/     node:test unit/integration tests, e2e smoke, perf check
+app/RepoShelf.Core/   .NET backend: SQLite/FTS5, search, jobs, HTTP API (Kestrel)
+app/RepoShelf/        WPF shell: WebView2 window, tray, autostart, single instance
+test/RepoShelf.Tests/ xunit suite (mirrors the Node test suite)
+tools/                perf harness, icon generator
+server/               Node.js reference implementation (same API)
+public/               web UI (vanilla JS, bilingual; embedded into the exe)
+extension/            Manifest V3 capture extension
+tests/                Node test suites + browser smoke + perf (reference)
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and

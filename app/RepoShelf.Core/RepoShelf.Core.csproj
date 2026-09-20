@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>RepoShelf.Core</RootNamespace>
+    <AssemblyName>RepoShelf.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kestrel serves the loopback API; HTTP.sys/HttpListener would require an
+         admin urlacl reservation, which breaks double-click usage. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The web UI is embedded so the desktop app is a self-contained binary.
+         Source files stay in <repo>/public (shared with the Node reference).
+         WithCulture=false: without it MSBuild classifies "purify.es.mjs" as a
+         Spanish ("es") satellite resource and it never lands in the main assembly. -->
+    <EmbeddedResource Include="..\..\public\**\*" WithCulture="false">
+      <LogicalName>RepoShelf.Ui.%(RecursiveDir)%(FileName)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

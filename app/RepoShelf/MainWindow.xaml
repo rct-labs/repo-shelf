@@ -1,0 +1,12 @@
+<Window x:Class="RepoShelf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Repo Shelf" Width="1280" Height="820" MinWidth="860" MinHeight="560"
+        Background="#f6f7f9">
+  <Grid>
+    <wv2:WebView2 x:Name="WebView"/>
+    <TextBlock x:Name="LoadingText" Text="Starting Repo Shelf…" FontSize="15"
+               Foreground="#59636e" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+  </Grid>
+</Window>

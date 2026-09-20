@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../test/RepoShelf.Tests/RepoShelf.Tests.csproj" />
+  <Project Path="RepoShelf.Core/RepoShelf.Core.csproj" />
+  <Project Path="RepoShelf/RepoShelf.csproj" />
+</Solution>

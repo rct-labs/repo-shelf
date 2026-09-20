@@ -60,7 +60,12 @@ async function waitForHealth(port, timeoutMs = 10_000) {
 }
 
 function startServer(port, dataDir) {
-  const child = spawn(process.execPath, [path.join(rootDir, 'server', 'index.js')], {
+  // REPO_SHELF_SERVER_BIN selects the published .NET desktop/service exe;
+  // default is the Node.js reference implementation.
+  const bin = process.env.REPO_SHELF_SERVER_BIN;
+  const command = bin || process.execPath;
+  const args = bin ? ['--service'] : [path.join(rootDir, 'server', 'index.js')];
+  const child = spawn(command, args, {
     env: {
       ...process.env,
       REPO_SHELF_PORT: String(port),

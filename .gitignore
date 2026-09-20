@@ -4,3 +4,7 @@ node_modules/
 coverage/
 test-results/
 playwright-report/
+
+# .NET build outputs
+**/bin/
+**/obj/
