@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="repo-shelf-token" content="__RS_TOKEN__">
+  <title>Repo Shelf</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" data-i18n="appTitle">Repo Shelf</div>
+    <input id="search-input" class="search-input" type="search" autocomplete="off" spellcheck="false">
+    <div class="topbar-actions">
+      <button id="btn-add" class="btn btn-primary" type="button" data-i18n="addRepo"></button>
+      <button id="btn-import" class="btn" type="button" data-i18n="importStars"></button>
+      <button id="btn-settings" class="btn" type="button" data-i18n="settings"></button>
+      <select id="lang-switch" class="select" aria-label="Language"></select>
+    </div>
+  </header>
+
+  <div class="filterbar" id="filterbar">
+    <select id="filter-status" class="select"><option value=""></option></select>
+    <select id="filter-tag" class="select"><option value=""></option></select>
+    <select id="filter-language" class="select"><option value=""></option></select>
+    <select id="filter-project" class="select"><option value=""></option></select>
+    <select id="filter-archived" class="select"></select>
+    <button id="btn-clear-filters" class="btn btn-link" type="button"></button>
+    <span id="results-count" class="results-count"></span>
+  </div>
+
+  <main class="main">
+    <section id="results-pane" class="results-pane">
+      <div id="results-state" class="state-block hidden"></div>
+      <ul id="results-list" class="results-list"></ul>
+      <div id="results-more" class="results-more hidden"><button id="btn-more" class="btn" type="button">▼</button></div>
+    </section>
+    <section id="detail-pane" class="detail-pane">
+      <div id="detail-empty" class="state-block"></div>
+      <div id="detail-content" class="detail-content hidden"></div>
+    </section>
+  </main>
+
+  <!-- Add repository modal -->
+  <dialog id="modal-add" class="modal">
+    <form id="form-add" method="dialog">
+      <h2 data-i18n="addTitle"></h2>
+      <label class="field">
+        <span data-i18n="addUrlLabel"></span>
+        <input id="add-url" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field">
+        <span data-i18n="detailReason"></span>
+        <input id="add-reason" type="text" autocomplete="off">
+      </label>
+      <label class="field">
+        <span data-i18n="detailTags"></span>
+        <input id="add-tags" type="text" autocomplete="off">
+        <small class="hint" data-i18n="commaSeparated"></small>
+      </label>
+      <p id="add-message" class="form-message hidden"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close data-i18n="cancel"></button>
+        <button type="submit" class="btn btn-primary" data-i18n="addSubmit"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Import stars modal -->
+  <dialog id="modal-import" class="modal">
+    <form id="form-import" method="dialog">
+      <h2 data-i18n="importTitle"></h2>
+      <label class="field">
+        <span data-i18n="importUsername"></span>
+        <input id="import-username" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field field-inline">
+        <input id="import-readme" type="checkbox" checked>
+        <span data-i18n="importIncludeReadme"></span>
+      </label>
+      <div id="import-progress" class="hidden">
+        <progress id="import-bar" max="1" value="0"></progress>
+        <p id="import-status" class="form-message"></p>
+        <ul id="import-failures" class="failure-list"></ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close data-i18n="close"></button>
+        <button type="button" id="btn-import-cancel" class="btn hidden" data-i18n="importCancel"></button>
+        <button type="button" id="btn-import-resume" class="btn hidden" data-i18n="importResume"></button>
+        <button type="submit" id="btn-import-start" class="btn btn-primary" data-i18n="importStart"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings modal -->
+  <dialog id="modal-settings" class="modal">
+    <div>
+      <h2 data-i18n="settingsTitle"></h2>
+      <dl class="settings-list">
+        <dt data-i18n="settingsVersion"></dt><dd id="settings-version"></dd>
+        <dt data-i18n="settingsDataDir"></dt><dd id="settings-datadir" class="mono"></dd>
+        <dt data-i18n="settingsPairing"></dt>
+        <dd>
+          <code id="settings-token" class="mono token-box"></code>
+          <button id="btn-copy-token" class="btn btn-link" type="button" data-i18n="copy"></button>
+          <p class="hint" data-i18n="settingsPairingHelp"></p>
+        </dd>
+        <dt data-i18n="settingsGithubToken"></dt>
+        <dd>
+          <p id="settings-gh-state" class="hint"></p>
+          <div class="row">
+            <input id="settings-gh-token" type="password" autocomplete="off">
+            <button id="btn-save-gh-token" class="btn" type="button" data-i18n="settingsTokenSave"></button>
+            <button id="btn-clear-gh-token" class="btn btn-link" type="button" data-i18n="settingsTokenClear"></button>
+          </div>
+          <p class="hint" data-i18n="settingsGithubTokenHelp"></p>
+        </dd>
+        <dt data-i18n="settingsExport"></dt>
+        <dd><button id="btn-export" class="btn" type="button" data-i18n="settingsExport"></button></dd>
+        <dt data-i18n="settingsRestore"></dt>
+        <dd>
+          <div class="row">
+            <select id="restore-mode" class="select"></select>
+            <button id="btn-restore" class="btn" type="button" data-i18n="restoreButton"></button>
+            <input id="restore-file" type="file" accept="application/json,.json" class="hidden">
+          </div>
+          <p id="restore-result" class="hint"></p>
+        </dd>
+        <dt data-i18n="refreshAll"></dt>
+        <dd>
+          <button id="btn-refresh-all" class="btn" type="button" data-i18n="refreshAll"></button>
+          <p id="refresh-all-state" class="hint"></p>
+        </dd>
+      </dl>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close data-i18n="close"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Confirm dialog -->
+  <dialog id="modal-confirm" class="modal modal-narrow">
+    <div>
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close data-i18n="cancel"></button>
+        <button type="button" id="btn-confirm" class="btn btn-danger" data-i18n="confirm"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

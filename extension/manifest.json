@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Repo Shelf",
+  "version": "0.1.0",
+  "description": "Save GitHub repositories to your local Repo Shelf library with a reason and tags.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhH6xubkMI/w7dUpjkEBcs9QpmnsrBJoQzceJTQl36XnzGXH35jF0emgEohjFtj7p+OLlBM2oGtKED/sn//0TkEwfrcyxC4P31VXnqZJQforYoeMad9H4DELTmHL/DmkGZMVHWY2R9479QGvVM7KOsti9kNMSjOI7nOTkAbtwCCQF4Ae5sraVcxZLV61YJtMq6dsHvKHLVZem3zEab+HIpVlsigncVlobyB58bSsUIHOak2altR2TmYl0r2qS4fNPcQMhICUnXBzEFsm2opEMIoD9QE0ibK/b2+7xivDOvnMz9Uun7sWXa+6KojXq4xrRMqxjsYJV7QsyxHL6SZJZ3QIDAQAB",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Repo Shelf"
+  },
+  "options_page": "options.html"
+}

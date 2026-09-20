@@ -1,0 +1,30 @@
+{
+  "name": "repo-shelf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first personal GitHub repository library with a Chromium capture extension",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:e2e": "node tests/e2e/smoke.mjs",
+    "perf": "node tests/perf/run-perf.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "dompurify": "^3.2.4",
+    "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0",
+    "playwright-core": "^1.49.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
+}

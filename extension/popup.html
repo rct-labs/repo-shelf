@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { --line: #d1d9e0; --ink: #1f2328; --dim: #59636e; --accent: #0969da; --danger: #cf222e; --ok: #116329; }
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; width: 340px; margin: 0; padding: 12px; font-size: 13px; color: var(--ink); }
+    h1 { font-size: 14px; margin: 0 0 8px; }
+    .repo-name { font-weight: 650; word-break: break-all; margin-bottom: 8px; }
+    .repo-name .owner { color: var(--dim); font-weight: 400; }
+    input[type="text"], textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; margin-bottom: 8px; }
+    textarea { min-height: 48px; resize: vertical; }
+    button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
+    button:hover { background: #eef1f4; }
+    .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .primary:hover { background: #0757ba; }
+    .link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+    .link:hover { text-decoration: underline; background: none; }
+    .msg { margin: 8px 0; padding: 6px 8px; border-radius: 6px; font-size: 12.5px; }
+    .msg.ok { background: #dafbe1; color: var(--ok); }
+    .msg.info { background: #ddf4ff; color: #0550ae; }
+    .msg.err { background: #ffebe9; color: var(--danger); }
+    .hidden { display: none !important; }
+    .pending { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+    .pending h2 { font-size: 12px; color: var(--dim); margin: 0 0 6px; }
+    .pending-item { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; }
+    .pending-item .url { font-size: 12px; word-break: break-all; }
+    .pending-item .row { display: flex; gap: 6px; margin-top: 4px; }
+    footer { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; }
+    .hint { font-size: 11px; color: var(--dim); }
+  </style>
+</head>
+<body>
+  <h1>Repo Shelf</h1>
+  <div id="not-configured" class="hidden">
+    <p id="not-configured-text"></p>
+    <button id="btn-open-options" class="primary"></button>
+  </div>
+
+  <div id="capture" class="hidden">
+    <div id="detected" class="hidden">
+      <div class="repo-name"><span class="owner" id="repo-owner"></span><span id="repo-name"></span></div>
+    </div>
+    <div id="manual" class="hidden">
+      <label class="hint" id="manual-label"></label>
+      <input type="text" id="input-url" spellcheck="false">
+    </div>
+    <textarea id="input-reason"></textarea>
+    <input type="text" id="input-tags" spellcheck="false">
+    <button id="btn-save" class="primary"></button>
+    <div id="message" class="msg hidden"></div>
+  </div>
+
+  <div id="pending" class="pending hidden">
+    <h2 id="pending-title"></h2>
+    <div id="pending-list"></div>
+  </div>
+
+  <footer>
+    <button id="btn-open-app" class="link"></button>
+    <button id="btn-options" class="link"></button>
+  </footer>
+
+  <script type="module" src="/popup.js"></script>
+</body>
+</html>
