@@ -286,6 +286,7 @@ public sealed class HttpApi
             var repo = repos.GetRepo(long.Parse(repoMatch.Groups[1].Value))
                 ?? throw new ServiceException("not_found", 404, "Repository not found");
             repo["hasReadme"] = repo["readme"]?.GetValue<string>() is { Length: > 0 };
+            repo["generated"] = new JsonObject { ["summary"] = _host.Ai.GetSummary(repo["id"]!.GetValue<long>()) };
             await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["repo"] = repo } });
             return;
         }
@@ -310,6 +311,58 @@ public sealed class HttpApi
         {
             var (repo, renamed) = await repos.RefreshRepoAsync(long.Parse(refreshMatch.Groups[1].Value));
             await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["repo"] = repo, ["renamed"] = renamed } });
+            return;
+        }
+
+        var summarizeMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/api/repos/(\d+)/summarize$");
+        if (summarizeMatch.Success && method == "POST")
+        {
+            var body = await ReadJsonBody(ctx);
+            var lang = body?["lang"]?.GetValue<string>() ?? "zh";
+            var summary = await _host.Ai.SummarizeAsync(long.Parse(summarizeMatch.Groups[1].Value), lang, ctx.RequestAborted);
+            await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["summary"] = summary } });
+            return;
+        }
+
+        if (method == "GET" && path == "/api/repos/lookup")
+        {
+            var urlParam = ctx.Request.Query["url"].FirstOrDefault() ?? "";
+            try
+            {
+                var parsed = RepoUrlParser.Parse(urlParam);
+                var repo = repos.FindByFullName(parsed.FullName);
+                if (repo is not null)
+                {
+                    repo["readme"] = null; // lookup stays light
+                }
+                await SendJson(ctx, 200, new JsonObject
+                {
+                    ["ok"] = true,
+                    ["data"] = new JsonObject
+                    {
+                        ["valid"] = true,
+                        ["fullName"] = parsed.FullName,
+                        ["found"] = repo is not null,
+                        ["repo"] = repo,
+                    },
+                });
+            }
+            catch (RepoUrlParser.InvalidUrlException)
+            {
+                await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["valid"] = false } });
+            }
+            return;
+        }
+
+        if (method == "POST" && path == "/api/import/chrome-bookmarks")
+        {
+            var body = await ReadJsonBody(ctx);
+            var (job, error) = jobs.StartBookmarksImport(body?["path"]?.GetValue<string>());
+            if (job is null)
+            {
+                throw new ServiceException("bookmarks_unavailable", 400, error ?? "Bookmarks file not found");
+            }
+            await SendJson(ctx, 202, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["job"] = job } });
             return;
         }
 
@@ -410,6 +463,7 @@ public sealed class HttpApi
                     ["dataDir"] = _host.Config.DataDir,
                     ["pairingToken"] = _host.PairingToken,
                     ["githubTokenSet"] = store.GetSetting("github_token") is not null,
+                    ["deepseekKeySet"] = store.GetSetting("deepseek_api_key") is not null,
                     ["statuses"] = new JsonArray(Store.Statuses.Select(s => JsonValue.Create(s)).ToArray()),
                 },
             });
@@ -432,6 +486,25 @@ public sealed class HttpApi
         {
             store.SetSetting("github_token", null);
             await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["githubTokenSet"] = false } });
+            return;
+        }
+
+        if (method == "PUT" && path == "/api/settings/deepseek-key")
+        {
+            var body = await ReadJsonBody(ctx);
+            var key = body?["token"]?.GetValue<string>()?.Trim();
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ServiceException("invalid_field", 400, "token must be a non-empty string");
+            }
+            store.SetSetting("deepseek_api_key", key);
+            await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["deepseekKeySet"] = true } });
+            return;
+        }
+        if (method == "DELETE" && path == "/api/settings/deepseek-key")
+        {
+            store.SetSetting("deepseek_api_key", null);
+            await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["deepseekKeySet"] = false } });
             return;
         }
 

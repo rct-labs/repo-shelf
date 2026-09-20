@@ -121,7 +121,9 @@ readable design with clear states matters more than dashboards or star charts.
 
 ## Explicitly deferred
 
-- MCP access, semantic embeddings and AI tagging/summaries.
+- MCP access, semantic embeddings and AI tagging (AI summaries are implemented:
+  optional DeepSeek key, stored in a separate `generated` table, never
+  overwriting personal fields).
 - Mobile apps, hosted multi-user service, shared collections and cloud sync.
 - Full source-code indexing, dependency scanning and automatic repository execution.
 - General web history capture or a universal bookmark manager.

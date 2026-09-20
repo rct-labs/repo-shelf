@@ -16,6 +16,8 @@ public sealed class ServiceHost : IDisposable
     public SearchService Search { get; }
     public JobManager Jobs { get; }
     public BackupService Backup { get; }
+    public DeepSeekClient DeepSeek { get; }
+    public AiService Ai { get; }
 
     private Microsoft.AspNetCore.Builder.WebApplication? _app;
 
@@ -29,6 +31,9 @@ public sealed class ServiceHost : IDisposable
         Search = new SearchService(store);
         Jobs = new JobManager(store, GitHub, Repos, config.MaxRateLimitWaitMs);
         Backup = new BackupService(store, Repos);
+        DeepSeek = new DeepSeekClient(getKey: () => store.GetSetting("deepseek_api_key"),
+            baseUrl: config.DeepSeekApiBase, model: config.DeepSeekModel);
+        Ai = new AiService(store, Repos, DeepSeek);
     }
 
     public static ServiceHost Create(IReadOnlyDictionary<string, string?>? env = null)

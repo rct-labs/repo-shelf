@@ -4,6 +4,22 @@ import { t, getLanguage, setLanguage, detectLanguage, LANGUAGES } from '/i18n.js
 
 const TOKEN = document.querySelector('meta[name="repo-shelf-token"]')?.content || '';
 
+// Theme: dark (default) / light, persisted in localStorage, mirrored to the host shell.
+const THEME_KEY = 'repo-shelf-theme';
+
+// Function declaration: hoisted, safe to call during module init.
+function hostNotify(msg) {
+  try { window.chrome?.webview?.postMessage(msg); } catch { /* not hosted in WebView2 */ }
+}
+
+function applyTheme(theme) {
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem(THEME_KEY, t);
+  hostNotify({ type: 'theme', mode: t });
+}
+applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
+
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('target', '_blank');
@@ -59,6 +75,7 @@ const state = {
   activeJobId: null,
   jobTimer: null,
   libraryEmpty: false,
+  detected: null, // { valid, fullName, found, repo }
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -73,32 +90,22 @@ function applyStaticI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
-  $('#search-input').placeholder = t('searchPlaceholder');
+  $('#omnibox').placeholder = t('omniboxPlaceholder');
   $('#settings-gh-token').placeholder = t('settingsTokenPlaceholder');
-  $('#add-url').placeholder = t('addUrlPlaceholder');
-  $('#add-reason').placeholder = t('detailReasonPlaceholder');
+  $('#settings-ds-key').placeholder = t('settingsTokenPlaceholderShort');
+  $('#btn-filter').title = t('filters');
 }
 
 function fillLanguageSwitch() {
   const select = $('#lang-switch');
   select.innerHTML = '';
   for (const { id, label } of LANGUAGES) {
-    const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = label;
-    select.append(opt);
+    select.append(new Option(label, id));
   }
   select.value = getLanguage();
 }
 
 function fillStaticSelects() {
-  const status = $('#filter-status');
-  const current = status.value;
-  status.innerHTML = '';
-  status.append(new Option(`${t('filterStatus')}: ${t('archivedAny')}`, ''));
-  for (const s of STATUS_KEYS) status.append(new Option(t(`status_${s}`), s));
-  status.value = current;
-
   const archived = $('#filter-archived');
   const currentA = archived.value;
   archived.innerHTML = '';
@@ -107,13 +114,21 @@ function fillStaticSelects() {
   archived.append(new Option(t('archivedNo'), 'false'));
   archived.value = currentA;
 
-  $('#btn-clear-filters').textContent = t('clearFilters');
   const mode = $('#restore-mode');
   const currentMode = mode.value;
   mode.innerHTML = '';
   mode.append(new Option(t('restoreMerge'), 'merge'));
   mode.append(new Option(t('restoreOverwrite'), 'overwrite'));
   mode.value = currentMode || 'merge';
+
+  const status = $('#filter-status');
+  const current = status.value;
+  status.innerHTML = '';
+  status.append(new Option(`${t('filterStatus')}: ${t('archivedAny')}`, ''));
+  for (const s of STATUS_KEYS) status.append(new Option(t(`status_${s}`), s));
+  status.value = current;
+
+  $('#btn-clear-filters').textContent = t('clearFilters');
 }
 
 function applyI18n() {
@@ -141,15 +156,12 @@ function confirmDialog({ title, message }) {
     $('#confirm-title').textContent = title;
     $('#confirm-message').textContent = message;
     const btn = $('#btn-confirm');
-    const onClick = () => {
+    const cleanup = () => {
       btn.removeEventListener('click', onClick);
       dialog.removeEventListener('close', onClose);
-      resolve(true);
     };
-    const onClose = () => {
-      btn.removeEventListener('click', onClick);
-      resolve(false);
-    };
+    const onClick = () => { cleanup(); resolve(true); };
+    const onClose = () => { cleanup(); resolve(false); };
     btn.addEventListener('click', () => { dialog.close(); onClick(); });
     dialog.addEventListener('close', onClose, { once: true });
     dialog.showModal();
@@ -157,53 +169,64 @@ function confirmDialog({ title, message }) {
 }
 
 // ---------------------------------------------------------------------------
+// Modes (bar <-> compact <-> expanded)
+// ---------------------------------------------------------------------------
+
+function setMode(mode) {
+  const app = $('#app');
+  if (app.classList.contains(`mode-${mode}`)) return;
+  app.classList.remove('mode-bar', 'mode-compact', 'mode-expanded');
+  app.classList.add(`mode-${mode}`);
+  $('#detail-pane').classList.toggle('hidden', mode !== 'expanded');
+  hostNotify({ type: 'resize', mode });
+  if (mode !== 'expanded') {
+    state.selectedId = null;
+    state.selectedRepo = null;
+    document.querySelectorAll('.result-item.active').forEach((el) => el.classList.remove('active'));
+  }
+}
+
+function expandApp() { setMode('expanded'); }
+function collapseApp() { setMode('compact'); }
+
+// ---------------------------------------------------------------------------
 // Search + results
 // ---------------------------------------------------------------------------
 
-function badge(text, kind = '') {
-  const span = document.createElement('span');
-  span.className = `badge ${kind}`.trim();
-  span.textContent = text;
-  return span;
-}
-
-function refreshBadge(repo) {
-  if (repo.refreshStatus === 'not_found') return badge(t('refresh_not_found'), 'warn');
-  if (repo.refreshStatus === 'inaccessible') return badge(t('refresh_inaccessible'), 'warn');
-  if (repo.refreshStatus === 'error') return badge(t('refresh_error'), 'warn');
-  if (repo.stale) return badge(t('stale'), 'warn');
-  return null;
+function statusDot(status) {
+  const dot = document.createElement('span');
+  dot.className = `dot dot-${status}`;
+  dot.title = t(`status_${status}`);
+  return dot;
 }
 
 function renderResults({ append = false } = {}) {
   const list = $('#results-list');
   if (!append) list.innerHTML = '';
   const frag = document.createDocumentFragment();
-  for (const item of state.items.slice(append ? state.items.length - state.pageSize : 0)) {
-    const { repo, snippet, matchedFields } = item;
+  const slice = append ? state.items.slice(-state.pageSize) : state.items;
+  for (const item of slice) {
+    const { repo, snippet } = item;
     const li = document.createElement('li');
     li.className = 'result-item' + (repo.id === state.selectedId ? ' active' : '');
     li.dataset.id = repo.id;
 
     const name = document.createElement('div');
     name.className = 'result-name';
+    name.append(statusDot(repo.annotation.status));
     const owner = document.createElement('span');
     owner.className = 'owner';
     owner.textContent = `${repo.owner}/`;
     name.append(owner, document.createTextNode(repo.name));
     li.append(name);
 
-    const badges = document.createElement('div');
-    badges.className = 'result-badges';
-    badges.append(badge(t(`status_${repo.annotation.status}`)));
-    if (repo.language) badges.append(badge(repo.language));
-    if (repo.archived) badges.append(badge(t('archivedYes'), 'warn'));
-    const rb = refreshBadge(repo);
-    if (rb) badges.append(rb);
-    if (repo.seenInImport && !repo.starredUpstream) {
-      badges.append(badge(t('unstarred'), 'warn'));
-    }
-    li.append(badges);
+    const meta = document.createElement('div');
+    meta.className = 'result-meta';
+    const bits = [repo.language, repo.stars != null ? `★ ${repo.stars}` : null].filter(Boolean);
+    if (repo.archived) bits.push(t('archivedYes'));
+    if (repo.stale) bits.push(t('stale'));
+    meta.textContent = bits.join(' · ');
+    if (meta.textContent) li.append(meta);
 
     if (snippet) {
       const sn = document.createElement('div');
@@ -211,20 +234,13 @@ function renderResults({ append = false } = {}) {
       sn.innerHTML = snippet; // server-escaped, contains only <mark> markup
       li.append(sn);
     }
-    if (matchedFields && matchedFields.length) {
-      const mf = document.createElement('div');
-      mf.className = 'matched-fields';
-      mf.textContent = t('matchedIn', { fields: matchedFields.map((f) => t(`field_${f}`)).join(', ') });
-      li.append(mf);
-    }
     li.addEventListener('click', () => selectRepo(repo.id));
     frag.append(li);
   }
   list.append(frag);
 
   $('#results-count').textContent = t('resultsCount', { count: state.total });
-  const moreBox = $('#results-more');
-  moreBox.classList.toggle('hidden', state.items.length >= state.total);
+  $('#results-more').classList.toggle('hidden', state.items.length >= state.total);
 
   const stateBlock = $('#results-state');
   if (state.total === 0) {
@@ -264,12 +280,176 @@ async function runSearch({ append = false } = {}) {
 }
 
 let searchDebounce = null;
-function onSearchInput() {
+let lookupSeq = 0;
+
+function onOmniboxInput() {
   clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(() => {
-    state.q = $('#search-input').value.trim();
+  searchDebounce = setTimeout(async () => {
+    const text = $('#omnibox').value.trim();
+    // Any typing or focus leaves bar mode and shows the list.
+    const app = $('#app');
+    if (app.classList.contains('mode-bar')) setMode('compact');
+    const looksLikeUrl = /github\.com|^[a-z0-9-]+\/[a-z0-9._-]+$/i.test(text);
+    if (looksLikeUrl) {
+      const seq = ++lookupSeq;
+      try {
+        const data = await api(`/api/repos/lookup?url=${encodeURIComponent(text)}`);
+        if (seq !== lookupSeq) return; // stale
+        if (data.valid) {
+          state.detected = data;
+          state.q = '';
+          renderSaveBanner();
+          renderResults();
+          return;
+        }
+      } catch { /* fall through to search */ }
+    }
+    state.detected = null;
+    renderSaveBanner();
+    state.q = text;
     runSearch();
   }, 200);
+}
+
+function renderSaveBanner() {
+  const banner = $('#save-banner');
+  const d = state.detected;
+  if (!d || !d.valid) {
+    banner.classList.add('hidden');
+    return;
+  }
+  banner.classList.remove('hidden');
+  const text = $('#save-banner-text');
+  const btn = $('#btn-banner-action');
+  text.innerHTML = '';
+  text.append(t('repoDetected') + ' ');
+  const code = document.createElement('span');
+  code.className = 'mono';
+  code.textContent = d.fullName;
+  text.append(code);
+  if (d.found) {
+    const badge = document.createElement('span');
+    badge.className = 'badge ok';
+    badge.style.marginLeft = '6px';
+    badge.textContent = t('alreadySaved');
+    text.append(badge);
+    btn.textContent = t('openIt');
+    btn.onclick = () => {
+      $('#omnibox').value = '';
+      state.detected = null;
+      renderSaveBanner();
+      state.q = '';
+      runSearch();
+      selectRepo(d.repo.id);
+    };
+  } else {
+    btn.textContent = t('saveIt');
+    btn.onclick = saveDetected;
+  }
+}
+
+async function saveDetected() {
+  const d = state.detected;
+  if (!d?.valid) return;
+  const btn = $('#btn-banner-action');
+  btn.disabled = true;
+  btn.textContent = t('savingIn');
+  try {
+    const result = await api('/api/repos', { method: 'POST', body: { url: `https://github.com/${d.fullName}` } });
+    const repoId = result.repo.id;
+    toast(result.outcome === 'created' ? t('addCreated') : t('addAlready'));
+    $('#omnibox').value = '';
+    state.detected = null;
+    renderSaveBanner();
+    await loadFilters();
+    await runSearch();
+    selectRepo(repoId);
+  } catch (err) {
+    toast(err.retryable ? `${err.message} ${t('retryableHint')}` : err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('saveIt');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Filter chips + popover
+// ---------------------------------------------------------------------------
+
+const FILTER_SELECTS = { status: '#filter-status', tag: '#filter-tag', language: '#filter-language', project: '#filter-project', archived: '#filter-archived' };
+
+function renderChips() {
+  const box = $('#chips');
+  box.innerHTML = '';
+  const active = Object.entries(state.filters).filter(([, v]) => v);
+  box.classList.toggle('hidden', active.length === 0);
+  $('#btn-filter').classList.toggle('active', active.length > 0);
+  for (const [key, value] of active) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const label = key === 'status' ? t(`status_${value}`)
+      : key === 'archived' ? (value === 'true' ? t('archivedYes') : t('archivedNo'))
+        : value;
+    chip.append(label + ' ');
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.addEventListener('click', () => {
+      state.filters[key] = '';
+      $(FILTER_SELECTS[key]).value = '';
+      renderChips();
+      runSearch();
+    });
+    chip.append(x);
+    box.append(chip);
+  }
+}
+
+function bindFilters() {
+  $('#btn-filter').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('#filter-popover').classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('#filter-popover').classList.contains('hidden')
+      && !e.target.closest('#filter-popover') && !e.target.closest('#btn-filter')) {
+      $('#filter-popover').classList.add('hidden');
+    }
+  });
+  for (const [key, sel] of Object.entries(FILTER_SELECTS)) {
+    $(sel).addEventListener('change', (e) => {
+      state.filters[key] = e.target.value;
+      renderChips();
+      runSearch();
+    });
+  }
+  $('#btn-clear-filters').addEventListener('click', () => {
+    state.filters = { status: '', tag: '', language: '', project: '', archived: '' };
+    for (const sel of Object.values(FILTER_SELECTS)) $(sel).value = '';
+    renderChips();
+    runSearch();
+  });
+}
+
+async function loadFilters() {
+  try {
+    const data = await api('/api/filters');
+    state.libraryEmpty = data.total === 0;
+    const fill = (sel, values, labelKey) => {
+      const select = $(sel);
+      const current = select.value;
+      select.innerHTML = '';
+      select.append(new Option(`${t(labelKey)}: ${t('archivedAny')}`, ''));
+      for (const v of values) select.append(new Option(v, v));
+      select.value = current;
+    };
+    fill('#filter-tag', data.tags, 'filterTag');
+    fill('#filter-language', data.languages, 'filterLanguage');
+    fill('#filter-project', data.projects, 'filterProject');
+    fillStaticSelects();
+  } catch {
+    state.libraryEmpty = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -282,9 +462,35 @@ function fmtTime(iso) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(getLanguage() === 'zh-CN' ? 'zh-CN' : 'en');
 }
 
+function refreshBadge(repo) {
+  if (repo.refreshStatus === 'not_found') return ['refresh_not_found', 'warn'];
+  if (repo.refreshStatus === 'inaccessible') return ['refresh_inaccessible', 'warn'];
+  if (repo.refreshStatus === 'error') return ['refresh_error', 'warn'];
+  if (repo.stale) return ['stale', 'warn'];
+  return null;
+}
+
+function badgeEl(text, kind = '') {
+  const span = document.createElement('span');
+  span.className = `badge ${kind}`.trim();
+  span.textContent = text;
+  return span;
+}
+
+function renderMarkdownInto(container, markdown) {
+  container.innerHTML = DOMPurify.sanitize(marked.parse(markdown || '', { async: false }));
+}
+
 function renderDetail(repo) {
   const pane = $('#detail-content');
   pane.innerHTML = '';
+
+  const back = document.createElement('button');
+  back.className = 'detail-back';
+  back.type = 'button';
+  back.textContent = t('backToList');
+  back.addEventListener('click', collapseApp);
+  pane.append(back);
 
   const head = document.createElement('div');
   head.className = 'detail-head';
@@ -305,25 +511,23 @@ function renderDetail(repo) {
   }
   const badges = document.createElement('div');
   badges.className = 'result-badges';
-  if (repo.archived) badges.append(badge(t('archivedYes'), 'warn'));
-  if (repo.starredUpstream) badges.append(badge(t('starred'), 'ok'));
-  else if (repo.seenInImport) badges.append(badge(t('unstarred'), 'warn'));
+  if (repo.archived) badges.append(badgeEl(t('archivedYes'), 'warn'));
+  if (repo.starredUpstream) badges.append(badgeEl(t('starred'), 'ok'));
+  else if (repo.seenInImport) badges.append(badgeEl(t('unstarred'), 'warn'));
   const rb = refreshBadge(repo);
-  if (rb) badges.append(rb);
-  if (repo.readmeTruncated) badges.append(badge(t('readmeTruncated'), 'warn'));
+  if (rb) badges.append(badgeEl(t(rb[0]), rb[1]));
   head.append(badges);
 
   const meta = document.createElement('dl');
   meta.className = 'meta-grid';
-  const metaRows = [
+  for (const [k, v] of [
     [t('stars'), repo.stars ?? '—'],
     [t('license'), repo.licenseId ?? '—'],
     [t('branch'), repo.defaultBranch ?? '—'],
     [t('pushedAt'), fmtTime(repo.pushedAt)],
     [t('savedAt'), fmtTime(repo.createdAt)],
     [t('fetchedAt'), fmtTime(repo.fetchedAt)],
-  ];
-  for (const [k, v] of metaRows) {
+  ]) {
     const wrap = document.createElement('div');
     const dt = document.createElement('dt');
     dt.textContent = k;
@@ -336,7 +540,7 @@ function renderDetail(repo) {
   if (repo.topics.length) {
     const topics = document.createElement('div');
     topics.className = 'result-badges';
-    for (const topic of repo.topics) topics.append(badge(topic));
+    for (const topic of repo.topics) topics.append(badgeEl(topic));
     head.append(topics);
   }
   pane.append(head);
@@ -391,6 +595,35 @@ function renderDetail(repo) {
   saveBtn.addEventListener('click', () => saveAnnotation(repo.id));
   pane.append(form);
 
+  // AI summary (never overwrites the user's own fields; stored separately)
+  const aiBox = document.createElement('div');
+  aiBox.className = 'ai-summary';
+  const aiHead = document.createElement('h3');
+  aiHead.append(badgeEl('AI', 'ai'), document.createTextNode(' ' + t('aiSummary')));
+  const aiBtn = document.createElement('button');
+  aiBtn.className = 'btn btn-link';
+  aiBtn.type = 'button';
+  const existing = repo.generated?.summary;
+  aiBtn.textContent = existing ? t('aiRegenerate') : t('aiGenerate');
+  aiBtn.addEventListener('click', () => generateSummary(repo.id, aiBtn));
+  aiHead.append(aiBtn);
+  aiBox.append(aiHead);
+  const aiBody = document.createElement('div');
+  aiBody.className = 'ai-body';
+  if (existing) {
+    renderMarkdownInto(aiBody, existing.content);
+    const meta2 = document.createElement('p');
+    meta2.className = 'hint';
+    meta2.textContent = `${existing.model} · ${fmtTime(existing.createdAt)} · ${t('aiDisclaimer')}`;
+    aiBox.append(aiBody, meta2);
+  } else {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = t('aiDisclaimer');
+    aiBox.append(hint);
+  }
+  pane.append(aiBox);
+
   // README
   const readmeSection = document.createElement('div');
   readmeSection.className = 'readme-render';
@@ -399,13 +632,14 @@ function renderDetail(repo) {
   readmeSection.append(readmeTitle);
   if (repo.hasReadme && repo.readme) {
     const rendered = document.createElement('div');
-    rendered.innerHTML = DOMPurify.sanitize(marked.parse(repo.readme, { async: false }));
+    renderMarkdownInto(rendered, repo.readme);
     readmeSection.append(rendered);
-  } else if (repo.hasReadme) {
-    const note = document.createElement('p');
-    note.className = 'hint';
-    note.textContent = t('loading');
-    readmeSection.append(note);
+    if (repo.readmeTruncated) {
+      const trunc = document.createElement('p');
+      trunc.className = 'hint';
+      trunc.textContent = t('readmeTruncated');
+      readmeSection.append(trunc);
+    }
   } else {
     const note = document.createElement('p');
     note.className = 'hint';
@@ -415,14 +649,39 @@ function renderDetail(repo) {
   pane.append(readmeSection);
 }
 
+async function generateSummary(id, btn) {
+  btn.disabled = true;
+  btn.textContent = t('aiWorking');
+  try {
+    const { summary } = await api(`/api/repos/${id}/summarize`, {
+      method: 'POST',
+      body: { lang: getLanguage() === 'zh-CN' ? 'zh' : 'en' },
+    });
+    if (state.selectedRepo?.id === id) {
+      state.selectedRepo.generated = { summary };
+      renderDetail(state.selectedRepo);
+    }
+    toast(t('aiSummary') + ' ✓');
+  } catch (err) {
+    if (err.code === 'ai_not_configured') {
+      toast(t('aiNotConfigured'));
+      $('#btn-settings').click();
+    } else {
+      toast(err.retryable ? `${err.message} ${t('retryableHint')}` : err.message);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = state.selectedRepo?.generated?.summary ? t('aiRegenerate') : t('aiGenerate');
+  }
+}
+
 async function selectRepo(id) {
   state.selectedId = id;
+  expandApp();
   document.querySelectorAll('.result-item').forEach((el) => el.classList.toggle('active', Number(el.dataset.id) === id));
-  $('#detail-empty').classList.add('hidden');
   try {
     const { repo } = await api(`/api/repos/${id}`);
     state.selectedRepo = repo;
-    $('#detail-content').classList.remove('hidden');
     renderDetail(repo);
   } catch (err) {
     toast(err.message);
@@ -458,6 +717,8 @@ async function refreshRepo(id) {
   try {
     const { repo } = await api(`/api/repos/${id}/refresh`, { method: 'POST' });
     toast(t('toastRefreshed'));
+    const summary = state.selectedRepo?.generated?.summary;
+    if (summary) repo.generated = { summary };
     state.selectedRepo = repo;
     renderDetail(repo);
     runSearch();
@@ -472,11 +733,7 @@ async function removeRepo(id) {
   try {
     await api(`/api/repos/${id}`, { method: 'DELETE' });
     toast(t('toastDeleted'));
-    state.selectedId = null;
-    state.selectedRepo = null;
-    $('#detail-content').classList.add('hidden');
-    $('#detail-empty').classList.remove('hidden');
-    $('#detail-empty').textContent = t('detailEmpty');
+    collapseApp();
     await loadFilters();
     await runSearch();
   } catch (err) {
@@ -485,97 +742,11 @@ async function removeRepo(id) {
 }
 
 // ---------------------------------------------------------------------------
-// Filters
-// ---------------------------------------------------------------------------
-
-async function loadFilters() {
-  try {
-    const data = await api('/api/filters');
-    state.libraryEmpty = data.total === 0;
-    const keep = (sel) => $(sel).value;
-    const fill = (sel, values, labelKey) => {
-      const select = $(sel);
-      const current = keep(sel);
-      select.innerHTML = '';
-      select.append(new Option(`${t(labelKey)}: ${t('archivedAny')}`, ''));
-      for (const v of values) select.append(new Option(v, v));
-      select.value = current;
-    };
-    fill('#filter-tag', data.tags, 'filterTag');
-    fill('#filter-language', data.languages, 'filterLanguage');
-    fill('#filter-project', data.projects, 'filterProject');
-    fillStaticSelects();
-  } catch {
-    state.libraryEmpty = false;
-  }
-}
-
-function bindFilters() {
-  const map = { status: '#filter-status', tag: '#filter-tag', language: '#filter-language', project: '#filter-project', archived: '#filter-archived' };
-  for (const [key, sel] of Object.entries(map)) {
-    $(sel).addEventListener('change', (e) => {
-      state.filters[key] = e.target.value;
-      runSearch();
-    });
-  }
-  $('#btn-clear-filters').addEventListener('click', () => {
-    state.filters = { status: '', tag: '', language: '', project: '', archived: '' };
-    for (const sel of Object.values(map)) $(sel).value = '';
-    runSearch();
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Add modal
-// ---------------------------------------------------------------------------
-
-function bindAddModal() {
-  const dialog = $('#modal-add');
-  $('#btn-add').addEventListener('click', () => {
-    $('#add-message').classList.add('hidden');
-    dialog.showModal();
-    $('#add-url').focus();
-  });
-  $('#form-add').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = $('#add-message');
-    msg.classList.add('hidden');
-    const submitBtn = $('#form-add .btn-primary');
-    submitBtn.disabled = true;
-    try {
-      const result = await api('/api/repos', {
-        method: 'POST',
-        body: {
-          url: $('#add-url').value.trim(),
-          reason: $('#add-reason').value.trim(),
-          tags: splitCsv($('#add-tags').value),
-        },
-      });
-      msg.className = 'form-message ok';
-      msg.textContent = result.outcome === 'created' ? t('addCreated') : t('addAlready');
-      await loadFilters();
-      await runSearch();
-      setTimeout(() => {
-        dialog.close();
-        $('#form-add').reset();
-        selectRepo(result.repo.id);
-      }, 600);
-    } catch (err) {
-      msg.className = 'form-message err';
-      msg.textContent = err.retryable ? `${t('addRetryable')}` : err.message;
-    } finally {
-      submitBtn.disabled = false;
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Import modal
+// Import modal (stars + Chrome bookmarks)
 // ---------------------------------------------------------------------------
 
 function renderJob(job) {
-  const progress = $('#import-progress');
-  progress.classList.remove('hidden');
+  $('#import-progress').classList.remove('hidden');
   const statusEl = $('#import-status');
   statusEl.className = 'form-message';
   statusEl.textContent = t('importProgress', job);
@@ -590,7 +761,7 @@ function renderJob(job) {
   }
   $('#btn-import-start').classList.toggle('hidden', job.status === 'running');
   $('#btn-import-cancel').classList.toggle('hidden', job.status !== 'running');
-  $('#btn-import-resume').classList.toggle('hidden', !(job.status === 'failed' || job.status === 'cancelled'));
+  $('#btn-import-resume').classList.toggle('hidden', !(job.status === 'failed' || job.status === 'cancelled') || job.type !== 'stars');
   const failures = $('#import-failures');
   failures.innerHTML = '';
   for (const f of (job.failures || []).slice(-8)) {
@@ -638,8 +809,20 @@ function bindImportModal() {
       renderJob(job);
       pollJob(job.id);
     } catch (err) {
-      const statusEl = $('#import-status');
       $('#import-progress').classList.remove('hidden');
+      const statusEl = $('#import-status');
+      statusEl.className = 'form-message err';
+      statusEl.textContent = err.message;
+    }
+  });
+  $('#btn-import-bookmarks').addEventListener('click', async () => {
+    try {
+      const { job } = await api('/api/import/chrome-bookmarks', { method: 'POST', body: {} });
+      renderJob(job);
+      pollJob(job.id);
+    } catch (err) {
+      $('#import-progress').classList.remove('hidden');
+      const statusEl = $('#import-status');
       statusEl.className = 'form-message err';
       statusEl.textContent = err.message;
     }
@@ -648,12 +831,11 @@ function bindImportModal() {
     if (state.activeJobId) await api(`/api/jobs/${state.activeJobId}/cancel`, { method: 'POST' }).catch(() => {});
   });
   $('#btn-import-resume').addEventListener('click', async () => {
-    if (state.activeJobId) {
-      const { job } = await api(`/api/jobs/${state.activeJobId}/resume`, { method: 'POST' }).catch((err) => ({ job: null, err }));
-      if (job) {
-        renderJob(job);
-        pollJob(job.id);
-      }
+    if (!state.activeJobId) return;
+    const { job } = await api(`/api/jobs/${state.activeJobId}/resume`, { method: 'POST' }).catch(() => ({ job: null }));
+    if (job) {
+      renderJob(job);
+      pollJob(job.id);
     }
   });
 }
@@ -671,7 +853,9 @@ function bindSettingsModal() {
       $('#settings-datadir').textContent = data.dataDir;
       $('#settings-token').textContent = data.pairingToken;
       $('#settings-gh-state').textContent = data.githubTokenSet ? t('settingsGithubTokenSet') : t('settingsGithubTokenUnset');
+      $('#settings-ds-state').textContent = data.deepseekKeySet ? t('settingsDeepseekSet') : t('settingsDeepseekUnset');
       $('#settings-gh-token').value = '';
+      $('#settings-ds-key').value = '';
       dialog.showModal();
     } catch (err) {
       toast(err.message);
@@ -682,19 +866,24 @@ function bindSettingsModal() {
     $('#btn-copy-token').textContent = t('copied');
     setTimeout(() => { $('#btn-copy-token').textContent = t('copy'); }, 1500);
   });
-  $('#btn-save-gh-token').addEventListener('click', async () => {
-    try {
-      await api('/api/settings/github-token', { method: 'PUT', body: { token: $('#settings-gh-token').value } });
-      $('#settings-gh-state').textContent = t('settingsGithubTokenSet');
-      $('#settings-gh-token').value = '';
-    } catch (err) {
-      toast(err.message);
-    }
-  });
-  $('#btn-clear-gh-token').addEventListener('click', async () => {
-    await api('/api/settings/github-token', { method: 'DELETE' }).catch(() => {});
-    $('#settings-gh-state').textContent = t('settingsGithubTokenUnset');
-  });
+  const bindKey = (inputSel, saveSel, clearSel, stateSel, path, setKey) => {
+    $(saveSel).addEventListener('click', async () => {
+      try {
+        await api(path, { method: 'PUT', body: { token: $(inputSel).value } });
+        $(stateSel).textContent = t(setKey);
+        $(inputSel).value = '';
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+    $(clearSel).addEventListener('click', async () => {
+      await api(path, { method: 'DELETE' }).catch(() => {});
+      $(stateSel).textContent = t(setKey === 'settingsGithubTokenSet' ? 'settingsGithubTokenUnset' : 'settingsDeepseekUnset');
+    });
+  };
+  bindKey('#settings-gh-token', '#btn-save-gh-token', '#btn-clear-gh-token', '#settings-gh-state', '/api/settings/github-token', 'settingsGithubTokenSet');
+  bindKey('#settings-ds-key', '#btn-save-ds-key', '#btn-clear-ds-key', '#settings-ds-state', '/api/settings/deepseek-key', 'settingsDeepseekSet');
+
   $('#btn-export').addEventListener('click', async () => {
     try {
       const res = await fetch('/api/export', { headers: { 'x-reposhelf-token': TOKEN } });
@@ -714,8 +903,7 @@ function bindSettingsModal() {
     if (!file) return;
     try {
       const text = await file.text();
-      const mode = $('#restore-mode').value;
-      const res = await fetch(`/api/restore?mode=${mode}`, {
+      const res = await fetch(`/api/restore?mode=${$('#restore-mode').value}`, {
         method: 'POST',
         headers: { 'x-reposhelf-token': TOKEN, 'content-type': 'application/json' },
         body: text,
@@ -754,24 +942,57 @@ function bindModals() {
 function init() {
   setLanguage(detectLanguage());
   applyI18n();
-  $('#detail-empty').textContent = t('detailEmpty');
   $('#lang-switch').addEventListener('change', async (e) => {
     setLanguage(e.target.value);
     applyI18n();
+    renderChips();
     renderResults();
     if (state.selectedRepo) renderDetail(state.selectedRepo);
   });
-  $('#search-input').addEventListener('input', onSearchInput);
+  $('#omnibox').addEventListener('input', onOmniboxInput);
+  $('#omnibox').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && state.detected?.valid) {
+      e.preventDefault();
+      $('#btn-banner-action').click();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return; // dialogs close natively
+    if (!$('#filter-popover').classList.contains('hidden')) {
+      $('#filter-popover').classList.add('hidden');
+      return;
+    }
+    const app = $('#app');
+    if (app.classList.contains('mode-expanded')) {
+      collapseApp();
+    } else if (app.classList.contains('mode-compact')) {
+      // Compact -> bar: collapse to just the omnibox strip.
+      setMode('bar');
+    } else if ($('#omnibox').value) {
+      $('#omnibox').value = '';
+      state.q = '';
+      state.detected = null;
+      renderSaveBanner();
+      runSearch();
+    }
+  });
+  $('#omnibox').addEventListener('focus', () => {
+    if ($('#app').classList.contains('mode-bar')) setMode('compact');
+  });
+  $('#btn-theme').addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
   $('#btn-more').addEventListener('click', () => {
     state.offset += state.pageSize;
     runSearch({ append: true });
   });
   bindFilters();
   bindModals();
-  bindAddModal();
   bindImportModal();
   bindSettingsModal();
   loadFilters().then(() => runSearch());
+  $('#omnibox').focus();
 }
 
 init();

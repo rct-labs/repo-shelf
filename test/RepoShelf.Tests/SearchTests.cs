@@ -121,3 +121,41 @@ public class SearchTests
         Assert.Contains("&lt;script&gt;", result.Items[0].Snippet);
     }
 }
+
+public class PrefixSearchTests
+{
+    [Fact]
+    public void PrefixMatchesLatinTokens()
+    {
+        using var store = Store.Open(":memory:");
+        var repos = new RepoService(store, new GitHubClient(baseUrl: "http://unused"));
+        repos.UpsertSource(new RepoMeta(1, "me", "archify", "me/archify", "u", "diagrams", new(), "TypeScript", "MIT", false, null, 1, "main"));
+        repos.UpsertSource(new RepoMeta(2, "me", "zoo", "me/zoo", "u", "animals", new(), "Go", "MIT", false, null, 1, "main"));
+        var search = new SearchService(store);
+        var result = search.Search(new SearchService.SearchParams(Query: "ar"));
+        Assert.Equal(1, result.Total);
+        Assert.Equal("archify", result.Items[0].Repo["name"]!.GetValue<string>());
+        // Prefix must not turn into substring matching across word boundaries.
+        Assert.Equal(0, search.Search(new SearchService.SearchParams(Query: "oo")).Total); // "oo" is not a prefix of "zoo"
+    }
+}
+
+public class SnippetMarkupTests
+{
+    [Fact]
+    public void ReadmeSnippetsStripHtmlTags()
+    {
+        using var store = Store.Open(":memory:");
+        var repos = new RepoService(store, new GitHubClient(baseUrl: "http://unused"));
+        var (id, _, _) = repos.UpsertSource(
+            new RepoMeta(1, "a", "badgeheavy", "a/badgeheavy", "u", "", new(), null, null, false, null, 1, "main"),
+            readme: "<p align=\"center\"><strong>English</strong> | <a href=\"./x.md\">简体中文</a></p>\n<p align=\"center\"><img src=\"badge.svg\"/></p>\n\n这个库用来做增量同步的演示。",
+            readmeProvided: true);
+        var search = new SearchService(store);
+        var result = search.Search(new SearchService.SearchParams(Query: "增量同步"));
+        Assert.Single(result.Items);
+        Assert.DoesNotContain("<p align", result.Items[0].Snippet);
+        Assert.DoesNotContain("<img", result.Items[0].Snippet);
+        Assert.Contains("<mark>", result.Items[0].Snippet);
+    }
+}

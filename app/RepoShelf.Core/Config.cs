@@ -1,13 +1,15 @@
 namespace RepoShelf.Core;
 
 /// <summary>Runtime configuration, resolved from environment variables.</summary>
-public sealed record AppConfig(
+    public sealed record AppConfig(
     string Host,
     int Port,
     string DataDir,
     string GitHubApiBase,
     string? PairingTokenOverride,
-    int MaxRateLimitWaitMs)
+    int MaxRateLimitWaitMs,
+    string? DeepSeekApiBase = null,
+    string? DeepSeekModel = null)
 {
     public const int DefaultPort = 4790;
 
@@ -35,6 +37,8 @@ public sealed record AppConfig(
             DataDir: Get("REPO_SHELF_DATA_DIR") is { Length: > 0 } d ? Path.GetFullPath(d) : DefaultDataDir(),
             GitHubApiBase: (Get("REPO_SHELF_GITHUB_API") ?? "https://api.github.com").TrimEnd('/'),
             PairingTokenOverride: Get("REPO_SHELF_TOKEN"),
-            MaxRateLimitWaitMs: maxWait);
+            MaxRateLimitWaitMs: maxWait,
+            DeepSeekApiBase: Get("REPO_SHELF_DEEPSEEK_API"),
+            DeepSeekModel: Get("REPO_SHELF_DEEPSEEK_MODEL"));
     }
 }

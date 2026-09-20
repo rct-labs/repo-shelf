@@ -51,6 +51,17 @@ function buildMatchers(tokens) {
   return tokens.map(tokenMatcher);
 }
 
+// READMEs often start with raw HTML blocks (centered headers, badges);
+// strip script/style bodies and all tags so snippets show prose only.
+function stripMarkup(text) {
+  if (!text) return text;
+  return text
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function fieldValues(row) {
   let topics = [];
   try {
@@ -63,7 +74,7 @@ function fieldValues(row) {
     topics: topics.join(' '),
     reason: row.reason || '',
     notes: row.notes || '',
-    readme: (row.readme || '').slice(0, README_SNIPPET_SCAN_LIMIT),
+    readme: stripMarkup((row.readme || '').slice(0, README_SNIPPET_SCAN_LIMIT)),
   };
 }
 
@@ -100,7 +111,13 @@ export function highlightRow(row, tokens) {
 function ftsMatchQuery(tokens) {
   // Quoted phrases per token avoid FTS5 query-syntax injection; AND requires
   // every token (e.g. every Chinese bigram of the query) to be present.
-  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' AND ');
+  // The last Latin token gets a prefix marker so typeahead works:
+  // "ar" matches the indexed token "archify".
+  const isCjk = (t) => [...t].some((c) => /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/.test(c));
+  return tokens.map((t, i) => {
+    const quoted = `"${t.replace(/"/g, '""')}"`;
+    return i === tokens.length - 1 && !isCjk(t) ? `${quoted} *` : quoted;
+  }).join(' AND ');
 }
 
 function buildFilters(filters) {

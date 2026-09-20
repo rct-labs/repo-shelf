@@ -2,11 +2,43 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="Repo Shelf" Width="1280" Height="820" MinWidth="860" MinHeight="560"
-        Background="#f6f7f9">
+        Title="Repo Shelf" Width="640" Height="500" MinWidth="560" MinHeight="96"
+        WindowStyle="None" ResizeMode="CanResize"
+        Background="#101214">
+  <WindowChrome.WindowChrome>
+    <!-- CaptionHeight MUST be 0: a nonzero caption strip is OS non-client area
+         and swallows all mouse input, which made the min/close buttons dead.
+         Dragging is implemented in TitleBar_MouseLeftButtonDown instead. -->
+    <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+  </WindowChrome.WindowChrome>
   <Grid>
-    <wv2:WebView2 x:Name="WebView"/>
-    <TextBlock x:Name="LoadingText" Text="Starting Repo Shelf…" FontSize="15"
-               Foreground="#59636e" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="30"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <!-- Custom title bar (dragged anywhere except the buttons). -->
+    <Border x:Name="TitleBar" Grid.Row="0" Background="#101214" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+      <Grid>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+          <Image x:Name="TitleIcon" Width="15" Height="15" Margin="0,0,7,0"/>
+          <TextBlock Text="Repo Shelf" FontSize="12" Foreground="#8b938f" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="BtnMin" Content="–" Width="40" BorderThickness="0" Background="Transparent"
+                  Foreground="#8b938f" Click="BtnMin_Click"/>
+          <Button x:Name="BtnClose" Content="✕" Width="40" BorderThickness="0" Background="Transparent"
+                  Foreground="#8b938f" Click="BtnClose_Click"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- WebView2 is a child HWND that swallows edge hit-testing, so the window
+         keeps a 6px WPF-owned frame for WindowChrome resize grips. -->
+    <Grid Grid.Row="1" Margin="6,0,6,6">
+      <wv2:WebView2 x:Name="WebView"/>
+      <TextBlock x:Name="LoadingText" Text="Starting Repo Shelf…" FontSize="15"
+                 Foreground="#7d9c8a" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
   </Grid>
 </Window>

@@ -18,7 +18,9 @@ External read-only calls ──► api.github.com (optional token)
 The desktop app is the primary deliverable. The `server/` Node.js
 implementation is a fully working reference with the same API and behavior,
 kept for development and fast iteration; both share `public/` (the web UI) and
-the extension unchanged.
+the extension unchanged. AI summaries and Chrome-bookmarks import are
+desktop-only; the Node reference implements the rest of the API, including
+omnibox lookup.
 
 ## Stack choice
 
@@ -38,15 +40,29 @@ the extension unchanged.
 
 - `App.xaml.cs`: single instance via named mutex + an EventWaitHandle that
   tells the running instance to show its window; modes `--background`
-  (service + tray, no window; the login entry) and `--service` (headless).
+  (service + tray, no window; the login entry) and `--service` (headless);
+  global hotkey `Ctrl+Alt+K` (message-only HWND + `RegisterHotKey`) summons
+  the compact window.
 - `TrayIcon.cs`: WinForms NotifyIcon; menu Open / Launch at login / Quit.
 - `ShellIntegration.cs`: launch-at-login via the HKCU Run key
   (`RepoShelf.exe --background`), registered on first run, reversible from the
   tray.
-- `MainWindow.xaml.cs`: WebView2 with its user-data folder under
-  `%LOCALAPPDATA%\repo-shelf\webview2`; closing the window hides to the tray.
+- `MainWindow.xaml.cs`: frameless window (WindowChrome; DWM rounded corners
+  and resizing kept). Hosts a WebView2 control whose user-data folder lives in
+  `%LOCALAPPDATA%\repo-shelf\webview2`. The web UI asks for compact/expanded
+  sizes via `WebView2.WebMessageReceived`; the window animates between
+  640×500 (search/list) and 1120×720 (detail). Closing hides to the tray.
 - If the port is already served by a healthy Repo Shelf service, a second app
   instance attaches to it instead of failing.
+
+## AI summaries (optional)
+
+- `DeepSeekClient` calls the OpenAI-compatible chat API (`deepseek-chat` by
+  default) with metadata + a truncated README. The key is stored server-side
+  in the settings table only — never exported, logged or sent to the browser.
+- Results are stored in the `generated` table (separate from both source
+  metadata and personal annotations) and included in exports. The UI marks
+  them clearly as AI-generated.
 
 ## Identity and storage
 

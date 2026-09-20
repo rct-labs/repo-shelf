@@ -10,9 +10,18 @@ no cloud account, no AI service, no telemetry.
 
 ## Features
 
-- **One-click capture** from a GitHub repository page (Chrome/Edge extension)
-  or by pasting a URL into the app. Renamed/transferred repositories keep a
-  single record via the durable GitHub repository id.
+- **One-click capture** from a GitHub repository page (Chrome/Edge extension),
+  or by pasting a URL into the app's single input box — the same box searches
+  and saves. Renamed/transferred repositories keep a single record via the
+  durable GitHub repository id.
+- **Launcher-style window**: a small borderless window that stays out of the
+  way; `Ctrl+Alt+K` summons it from anywhere, Esc dismisses; it expands only
+  when you open a repository's details.
+- **AI summaries (optional)**: a stored DeepSeek key lets the app summarize a
+  repository from its metadata and README. Summaries live in a separate
+  `generated` table — they never overwrite your own reason and notes.
+- **Import from Chrome bookmarks**: reads the Chromium bookmarks file
+  (read-only) and imports the GitHub repositories found there.
 - **Personal knowledge**: reason, notes, tags, related-project labels and a
   status (Inbox / To investigate / Tried / Adopted / Dismissed). Personal
   fields are stored separately from source metadata and survive refreshes,

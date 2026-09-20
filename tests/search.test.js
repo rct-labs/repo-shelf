@@ -124,3 +124,12 @@ test('snippets escape HTML from stored text', () => {
   assert.ok(!items[0].snippet.includes('<script>'), items[0].snippet);
   assert.ok(items[0].snippet.includes('&lt;script&gt;'), items[0].snippet);
 });
+
+test('typeahead: prefix matches Latin tokens but not substrings', () => {
+  const db = openDatabase(':memory:');
+  upsertSource(db, { githubId: 30, owner: 'me', name: 'archify', fullName: 'me/archify', htmlUrl: '', description: '', topics: [], language: null, licenseId: null, archived: false, pushedAt: null, stars: 0, defaultBranch: null }, {});
+  upsertSource(db, { githubId: 31, owner: 'me', name: 'zoo', fullName: 'me/zoo', htmlUrl: '', description: '', topics: [], language: null, licenseId: null, archived: false, pushedAt: null, stars: 0, defaultBranch: null }, {});
+  assert.equal(searchRepos(db, { q: 'ar' }).total, 1);
+  assert.equal(searchRepos(db, { q: 'ar' }).items[0].row.name, 'archify');
+  assert.equal(searchRepos(db, { q: 'oo' }).total, 0);
+});

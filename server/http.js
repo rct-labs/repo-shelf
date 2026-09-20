@@ -17,7 +17,8 @@ import path from 'node:path';
 
 import { STATUSES } from './db.js';
 import { APP_VERSION } from './config.js';
-import { ServiceError, saveRepo, getRepo, updateAnnotation, deleteRepo, refreshRepo, listFilterOptions, toRecord } from './repos.js';
+import { ServiceError, saveRepo, getRepo, updateAnnotation, deleteRepo, refreshRepo, listFilterOptions, toRecord, findByFullName } from './repos.js';
+import { parseGitHubRepoUrl } from './normalize.js';
 import { searchRepos } from './search.js';
 import { exportData, importData, BackupError } from './backup.js';
 import { getSetting, setSetting } from './db.js';
@@ -171,6 +172,18 @@ export function createApp({ db, gh, jobs, config, pairingToken, publicDir, vendo
         return { repo: { ...record, hasReadme }, matchedFields, snippet, snippetField, rank: row.rank ?? null };
       });
       return sendJson(res, 200, { ok: true, data: { total: result.total, items } });
+    }
+
+    if (req.method === 'GET' && p === '/api/repos/lookup') {
+      const urlParam = url.searchParams.get('url') || '';
+      try {
+        const parsed = parseGitHubRepoUrl(urlParam);
+        const repo = findByFullName(db, parsed.fullName);
+        if (repo) repo.readme = null; // lookup stays light
+        return sendJson(res, 200, { ok: true, data: { valid: true, fullName: parsed.fullName, found: Boolean(repo), repo } });
+      } catch {
+        return sendJson(res, 200, { ok: true, data: { valid: false } });
+      }
     }
 
     const repoMatch = p.match(/^\/api\/repos\/(\d+)$/);

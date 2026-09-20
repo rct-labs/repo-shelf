@@ -44,7 +44,8 @@ public sealed class BackupService
             {
                 string? S(string c) => reader.IsDBNull(reader.GetOrdinal(c)) ? null : reader.GetString(reader.GetOrdinal(c));
                 long? L(string c) => reader.IsDBNull(reader.GetOrdinal(c)) ? null : reader.GetInt64(reader.GetOrdinal(c));
-                repos.Add(new JsonObject
+                var repoId = reader.GetInt64(reader.GetOrdinal("id"));
+                var item = new JsonObject
                 {
                     ["githubId"] = reader.GetInt64(reader.GetOrdinal("github_id")),
                     ["owner"] = S("owner"),
@@ -76,7 +77,28 @@ public sealed class BackupService
                         ["createdAt"] = S("a_created_at"),
                         ["updatedAt"] = S("a_updated_at"),
                     },
-                });
+                };
+                // AI-generated text is part of the user's library data.
+                using (var gen = _store.Conn.CreateCommand())
+                {
+                    gen.CommandText = "SELECT content, model, lang, created_at FROM generated WHERE repo_id = $id AND kind = 'summary'";
+                    gen.Parameters.AddWithValue("$id", repoId);
+                    using var gr = gen.ExecuteReader();
+                    if (gr.Read())
+                    {
+                        item["generated"] = new JsonObject
+                        {
+                            ["summary"] = new JsonObject
+                            {
+                                ["content"] = gr.GetString(0),
+                                ["model"] = gr.GetString(1),
+                                ["lang"] = gr.GetString(2),
+                                ["createdAt"] = gr.GetString(3),
+                            },
+                        };
+                    }
+                }
+                repos.Add(item);
             }
         }
         return new JsonObject
@@ -212,6 +234,27 @@ public sealed class BackupService
                     cmd.ExecuteNonQuery();
                 }
                 _repos.ReindexRepo(repoId);
+            }
+
+            if (item["generated"]?["summary"] is JsonObject g)
+            {
+                lock (_store.Sync)
+                {
+                    using var cmd = _store.Conn.CreateCommand();
+                    cmd.CommandText = """
+                        INSERT INTO generated (repo_id, kind, content, model, lang, created_at)
+                        VALUES ($id, 'summary', $content, $model, $lang, $ts)
+                        ON CONFLICT(repo_id, kind) DO UPDATE SET
+                          content = excluded.content, model = excluded.model,
+                          lang = excluded.lang, created_at = excluded.created_at
+                        """;
+                    cmd.Parameters.AddWithValue("$id", repoId);
+                    cmd.Parameters.AddWithValue("$content", g["content"]?.GetValue<string>() ?? "");
+                    cmd.Parameters.AddWithValue("$model", g["model"]?.GetValue<string>() ?? "unknown");
+                    cmd.Parameters.AddWithValue("$lang", g["lang"]?.GetValue<string>() ?? "zh");
+                    cmd.Parameters.AddWithValue("$ts", g["createdAt"]?.GetValue<string>() ?? ts);
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
         return new JsonObject

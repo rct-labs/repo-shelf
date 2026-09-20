@@ -15,6 +15,7 @@ public partial class App : Application
     private ServiceHost? _service;
     private TrayIcon? _tray;
     private MainWindow? _window;
+    private HotKeys? _hotKeys;
     private bool _ownsService;
     private bool _quitting;
 
@@ -22,36 +23,42 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Single instance: a second launch just asks the running one to show.
-        _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
-        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
-        if (!createdNew)
+        var serviceOnly = e.Args.Contains("--service");
+        var background = e.Args.Contains("--background");
+
+        if (!serviceOnly)
         {
-            _showEvent.Set();
-            Shutdown();
-            return;
-        }
-        Task.Run(() =>
-        {
-            while (true)
+            // Single instance for the desktop app: a second launch just asks
+            // the running one to show. --service instances are exempt so tests
+            // and headless runs can coexist with the desktop app.
+            _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
+            _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+            if (!createdNew)
             {
-                try
-                {
-                    _showEvent.WaitOne();
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
-                Dispatcher.Invoke(ShowMainWindow);
+                _showEvent.Set();
+                Shutdown();
+                return;
             }
-        });
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    try
+                    {
+                        _showEvent.WaitOne();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return;
+                    }
+                    Dispatcher.Invoke(ShowMainWindow);
+                }
+            });
+        }
 
         // Tray app keeps running with no window open.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        var serviceOnly = e.Args.Contains("--service");
-        var background = e.Args.Contains("--background");
         _ = InitAsync(serviceOnly, background);
     }
 
@@ -95,6 +102,12 @@ public partial class App : Application
             }
 
             _tray = new TrayIcon(ShowMainWindow, ShellIntegration.IsAutostartEnabled, ShellIntegration.SetAutostart, Quit);
+            // Ctrl+Alt+K summons the compact window from anywhere.
+            _hotKeys = new HotKeys(() => Dispatcher.Invoke(ShowMainWindow));
+            if (!_hotKeys.Registered)
+            {
+                Console.Error.WriteLine("Hotkey Ctrl+Alt+K is taken by another application.");
+            }
             if (!background)
             {
                 ShowMainWindow();
@@ -102,6 +115,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine($"Repo Shelf failed to start: {ex}");
             System.Windows.MessageBox.Show($"Repo Shelf failed to start:\n{ex.Message}", "Repo Shelf", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             Shutdown();
         }
@@ -149,6 +163,7 @@ public partial class App : Application
             _window.Close();
         }
         _tray?.Dispose();
+        _hotKeys?.Dispose();
         if (_ownsService)
         {
             _service?.Dispose();

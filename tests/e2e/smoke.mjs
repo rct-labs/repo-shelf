@@ -228,7 +228,7 @@ async function main() {
     const initialCount = await app.locator('.result-item').count();
     check('library lists saved repositories', initialCount >= 2);
 
-    await app.fill('#search-input', '冒烟');
+    await app.fill('#omnibox', '冒烟');
     await app.waitForFunction(
       () => document.querySelectorAll('.result-item').length === 1,
       { timeout: 5000 },
@@ -236,11 +236,27 @@ async function main() {
     log('Chinese note search matched');
     await app.click('.result-item');
     await app.waitForSelector('#d-reason', { timeout: 5000 });
+    await app.waitForTimeout(400); // detail render
+    check('window expands to detail mode', await app.evaluate(() => document.getElementById('app').classList.contains('mode-expanded')));
     const reasonValue = await app.inputValue('#d-reason');
     check('detail shows personal reason', reasonValue.includes('冒烟'));
     check('detail shows README content', (await app.locator('.readme-render').textContent()).length > 10);
 
-    await app.fill('#search-input', 'evil-readme');
+    // Omnibox: pasting an unsaved repo URL shows the save banner; Enter saves.
+    await app.click('.detail-back');
+    await app.fill('#omnibox', 'https://github.com/octocat/git-consortium');
+    await app.waitForSelector('#save-banner:not(.hidden)', { timeout: 5000 });
+    check('save banner appears for unsaved repo URL', true);
+    await app.press('#omnibox', 'Enter');
+    // After a successful save the banner hides and the new record opens.
+    await app.waitForFunction(
+      () => document.getElementById('save-banner')?.classList.contains('hidden'),
+      { timeout: 30_000 },
+    );
+    const consortium = await api(port, '/api/repos?q=git-consortium');
+    check('omnibox Enter saved the repo', consortium.json?.data?.total === 1);
+
+    await app.fill('#omnibox', 'evil-readme');
     await app.waitForFunction(
       () => document.querySelectorAll('.result-item').length === 1,
       { timeout: 5000 },
@@ -259,8 +275,8 @@ async function main() {
     // ---- Language switch --------------------------------------------------
     await app.selectOption('#lang-switch', 'zh-CN');
     await app.waitForTimeout(200);
-    const addLabel = await app.locator('#btn-add').textContent();
-    check('language switch renders Chinese UI', addLabel === '收藏仓库');
+    const placeholder = await app.locator('#omnibox').getAttribute('placeholder');
+    check('language switch renders Chinese UI', placeholder?.includes('搜索') ?? false);
   } finally {
     await context.close().catch(() => {});
     server.kill();

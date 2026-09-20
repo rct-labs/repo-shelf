@@ -82,6 +82,18 @@ public sealed class Store : IDisposable
           github_id INTEGER NOT NULL,
           PRIMARY KEY (job_id, github_id)
         );
+
+        -- AI-generated text lives here, separate from both source metadata and
+        -- personal annotations, and never overwrites the user's own words.
+        CREATE TABLE IF NOT EXISTS generated (
+          repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+          kind TEXT NOT NULL,
+          content TEXT NOT NULL,
+          model TEXT NOT NULL,
+          lang TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (repo_id, kind)
+        );
         """;
 
     private readonly SqliteConnection _conn;

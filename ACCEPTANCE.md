@@ -119,14 +119,33 @@ measures 54.7 ms overall p95 on the same dataset shape
   single instance verified manually: window renders the bilingual UI,
   `HKCU\...\Run\RepoShelf` registered, second launch focuses the running
   instance, port-in-use falls back to attaching to the healthy service.
-- `dotnet test app/RepoShelf.slnx`: **69 tests, 69 pass** (hermetic).
+- `dotnet test app/RepoShelf.slnx`: **74 tests, 74 pass** (hermetic; includes
+  AI summary storage/separation, Chrome bookmarks parsing + import job, and
+  URL lookup for the omnibox).
 - `pnpm test`: **56 tests, 56 pass** (Node reference, hermetic).
-- `pnpm test:e2e` and `pnpm test:e2e:desktop`: 18 browser checks each, all
-  pass. Honest limitations: they launch a **visible** Playwright Chromium
-  window (extensions need a full build, not headless shell); they use the real
-  public GitHub API so they need network; branded Chrome/Edge ≥ 137 ignore
-  `--load-extension`, so automated runs use Chromium while real Chrome/Edge
-  install via developer mode remains fully supported.
+- `pnpm test:e2e` and `pnpm test:e2e:desktop`: browser checks each (extension
+  capture, offline pending queue + retry, omnibox URL detection + Enter-to-save,
+  Chinese search, hostile README sanitization, language switch). Honest
+  limitations: they launch a **visible** Playwright Chromium window (extensions
+  need a full build, not headless shell); they use the real public GitHub API
+  so they need network and are subject to GitHub's unauthenticated secondary
+  rate limit when the suite is re-run many times in a row (wait for the reset
+  or configure a token); branded Chrome/Edge ≥ 137 ignore `--load-extension`,
+  so automated runs use Chromium while real Chrome/Edge install via developer
+  mode remains fully supported.
+
+## Post-MVP additions (owner-requested)
+
+- Launcher-style borderless window (640×500 compact, expands to 1120×720 on
+  detail), global hotkey `Ctrl+Alt+K`, tray, launch-at-login.
+- Omnibox: one input for search and for saving pasted GitHub URLs (lookup
+  endpoint + save banner).
+- DeepSeek AI summaries (`generated` table; never overwrite personal fields;
+  key stored server-side only; excluded from exports).
+- Chrome/Edge bookmarks import (read-only parse of the Chromium Bookmarks
+  file; deduped; job with progress/failure reporting). A real import ran on
+  this machine: 20 added + 1 existing + 15 deferred by GitHub's
+  unauthenticated rate limit (re-runnable after reset or with a token).
 
 ## Command reference
 

@@ -215,3 +215,50 @@ public static class JobWaiter
         throw new TimeoutException($"Job {id} did not finish within {timeoutMs} ms");
     }
 }
+
+/// <summary>Fake DeepSeek (OpenAI-compatible) endpoint for tests.</summary>
+public sealed class FakeAiServer : IDisposable
+{
+    private readonly WebApplication _app;
+    public string BaseUrl { get; }
+    public string SummaryText { get; set; } = "这是一个测试总结。";
+    public bool Fail { get; set; }
+
+    public FakeAiServer()
+    {
+        var port = FreePort();
+        BaseUrl = $"http://127.0.0.1:{port}";
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseKestrelCore();
+        builder.WebHost.UseUrls(BaseUrl);
+        _app = builder.Build();
+        _app.Run(async ctx =>
+        {
+            if (Fail)
+            {
+                ctx.Response.StatusCode = 500;
+                return;
+            }
+            await ctx.Response.WriteAsJsonAsync(new JsonObject
+            {
+                ["choices"] = new JsonArray(new JsonObject
+                {
+                    ["message"] = new JsonObject { ["role"] = "assistant", ["content"] = SummaryText },
+                }),
+            });
+        });
+        _app.StartAsync().GetAwaiter().GetResult();
+    }
+
+    private static int FreePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    public void Dispose() => _app.StopAsync().GetAwaiter().GetResult();
+}

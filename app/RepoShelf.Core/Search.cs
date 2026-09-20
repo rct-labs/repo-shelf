@@ -103,7 +103,16 @@ public sealed class SearchService
             {
                 // Quoted phrases per token avoid FTS5 query-syntax injection;
                 // AND requires every token (e.g. each Chinese bigram) to match.
-                var match = string.Join(" AND ", tokens.Select(t => $"\"{t.Replace("\"", "\"\"")}\""));
+                // The last Latin token gets a prefix marker so typeahead works:
+                // "ar" matches the indexed token "archify".
+                var match = string.Join(" AND ", tokens.Select((t, i) =>
+                {
+                    var quoted = $"\"{t.Replace("\"", "\"\"")}\"";
+                    var isLast = i == tokens.Count - 1;
+                    return isLast && !t.Any(c => c is >= '㐀' and <= '䶿' or >= '一' and <= '鿿' or >= '豈' and <= '﫿')
+                        ? $"{quoted} *"
+                        : quoted;
+                }));
                 var baseSql = """
                     FROM search_fts
                     JOIN repos r ON r.id = search_fts.rowid
@@ -290,7 +299,7 @@ public sealed class SearchService
             ["topics"] = string.Join(' ', repo["topics"]?.AsArray().Select(x => x?.GetValue<string>() ?? "") ?? Enumerable.Empty<string>()),
             ["reason"] = repo["annotation"]?["reason"]?.GetValue<string>() ?? "",
             ["notes"] = repo["annotation"]?["notes"]?.GetValue<string>() ?? "",
-            ["readme"] = readmeRaw.Length > ReadmeSnippetScanLimit ? readmeRaw[..ReadmeSnippetScanLimit] : readmeRaw,
+            ["readme"] = StripMarkup(readmeRaw.Length > ReadmeSnippetScanLimit ? readmeRaw[..ReadmeSnippetScanLimit] : readmeRaw),
         };
 
         var matchedFields = FieldPriority
@@ -322,4 +331,18 @@ public sealed class SearchService
     }
 
     private static string HtmlEncode(string text) => HttpUtility.HtmlEncode(text);
+
+    // READMEs often start with raw HTML blocks (centered headers, badges);
+    // strip script/style bodies and all tags so snippets show prose only.
+    private static readonly Regex ScriptOrStyle = new(@"<(script|style)[^>]*>.*?</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex AnyTag = new(@"<[^>]+>", RegexOptions.Compiled);
+    private static readonly Regex MultiSpace = new(@"\s{2,}", RegexOptions.Compiled);
+
+    private static string StripMarkup(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var t = ScriptOrStyle.Replace(text, " ");
+        t = AnyTag.Replace(t, " ");
+        return MultiSpace.Replace(t, " ").Trim();
+    }
 }

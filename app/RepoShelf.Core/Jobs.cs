@@ -158,6 +158,64 @@ public sealed class JobManager
         return GetRow(id)!;
     }
 
+    /// <summary>Import GitHub repository URLs found in a Chromium bookmarks file.</summary>
+    public (JsonObject? Job, string? Error) StartBookmarksImport(string? bookmarksPath = null)
+    {
+        var urls = ChromeBookmarks.ExtractRepoUrls(bookmarksPath, out var sourcePath, out var error);
+        if (urls is null)
+        {
+            return (null, error);
+        }
+        var id = InsertJob("bookmarks", null, new JsonObject { ["path"] = sourcePath, ["total"] = urls.Count });
+        _bookmarkUrls[id] = urls;
+        Launch(id, RunBookmarksImportAsync);
+        return (GetRow(id), null);
+    }
+
+    private readonly ConcurrentDictionary<string, List<string>> _bookmarkUrls = new();
+
+    private async Task RunBookmarksImportAsync(string id, CancellationToken cancel)
+    {
+        var urls = _bookmarkUrls.TryRemove(id, out var u) ? u : new List<string>();
+        var p = LoadProgress(GetRow(id)!);
+        try
+        {
+            foreach (var url in urls)
+            {
+                cancel.ThrowIfCancellationRequested();
+                try
+                {
+                    var result = await _repos.SaveRepoAsync(url);
+                    if (result["outcome"]?.GetValue<string>() == "created") p.Added += 1; else p.Updated += 1;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    p.Failed += 1;
+                    p.PushFailure(url, ex is ServiceException se ? se.Code : ex is GitHubException ge ? ge.Code : "error");
+                }
+                p.Processed += 1;
+                if (p.Processed % 5 == 0)
+                {
+                    Flush(id, p);
+                }
+            }
+            Flush(id, p, u2 =>
+            {
+                u2.Set("status", "done");
+                u2.Set("finished_at", Now());
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            Flush(id, p, u2 =>
+            {
+                u2.Set("status", "cancelled");
+                u2.Set("finished_at", Now());
+            });
+        }
+        await Task.CompletedTask;
+    }
+
     /// <summary>Resume a failed or cancelled stars import from its last committed page.</summary>
     public JsonObject? ResumeJob(string id)
     {
