@@ -1,0 +1,90 @@
+{
+  "project_prefix": "",
+  "queue_file": "TASK_QUEUE.md",
+  "context_file": "CONTEXT.md",
+  "external_context": false,
+  "handoff_globs": [],
+  "doc_only_globs": [
+    "TASK_QUEUE.md",
+    "NEXT_SESSION.md",
+    "NEXT_SESSION.*.archive.md",
+    "SESSION.md",
+    "docs/handoff/*"
+  ],
+  "verify_cmd": "node scripts/verify.mjs",
+  "verify_timeout_s": 900,
+  "delivery": {
+    "stage": "development",
+    "checks": [],
+    "full_globs": [],
+    "integration_cmd": "node tests/e2e/smoke.mjs && node tests/e2e/discover.mjs"
+  },
+  "count_regex": "(\\d+)\\s+passed",
+  "frozen_globs": [],
+  "verdict_max_age_s": 5400,
+  "require_verdict_on_done": true,
+  "done_markers": [
+    "DONE"
+  ],
+  "todo_markers": [
+    "TODO"
+  ],
+  "blocked_markers": [
+    "BLOCKED"
+  ],
+  "in_progress_markers": [
+    "IN_PROGRESS"
+  ],
+  "workers": [
+    "codex",
+    "claude"
+  ],
+  "worker_prompt": "Invoke the {skill} skill. Execute exactly task {task} from the queue — claim {task}, implement it, verify it, commit it — then stop. Never return while a test, verification, build, or child process is still running. Run acceptance commands in the foreground with an adequate timeout; if any command is backgrounded, wait for it and check its exit code before responding. Never select a different TODO task, even if {task} is no longer TODO. Do not start a second task. Do not push. If {task} is BLOCKED, stop immediately and report why instead of guessing. Tool, sandbox, Git, quota, and filesystem failures are environment failures, not task blockers: do not mark the task BLOCKED for them.",
+  "worker_skill": "",
+  "max_tasks": 3,
+  "max_attempts_per_task": 2,
+  "max_model_calls": 40,
+  "worker_packet_max_bytes": 6000,
+  "worker_models": {
+    "pi": ""
+  },
+  "task_timeout_s": 5400,
+  "run_timeout_s": 28800,
+  "quota_cooldown_s": 21600,
+  "notify_cmd": "",
+  "heartbeat_s": 300,
+  "max_task_files": 6,
+  "human_decision_regex": "设计|决定|评审|design|decide|choose",
+  "strict_admit": false,
+  "serialize_full_acceptance": true,
+  "probe": {
+    "enabled": true,
+    "timeout_s": 90,
+    "retry_s": 600
+  },
+  "repair_continuation": {
+    "enabled": false,
+    "approved_by": "",
+    "tasks": [],
+    "expires_at": 0
+  },
+  "judge": {
+    "enabled": false,
+    "chain": [
+      "fable",
+      "opus",
+      "codex"
+    ],
+    "checkpoints": [],
+    "timeout_s": 1200,
+    "budget_usd_per_task": 5
+  },
+  "judge_prompt": "You are the read-only reviewer of finished work in this repository. Tasks under review: {tasks}. Commits since {base}: {commits}. Declared files: {files}. Last acceptance run tail:\n{verify_tail}\n\nRead the queue rows of these tasks and the acceptance sections of their work packages under docs/work/. Inspect the diff (`git diff {base}..HEAD`) and the tests it added or changed. Do not modify anything.\n\nReport findings that are concrete and file-anchored, each with a fix. Use severity 'high' only for a defect that makes the work wrong, unsafe or untested against its acceptance; 'medium' and 'low' for improvements. verdict: 'pass' when the work meets its acceptance and nothing high remains; 'revise' when a high finding needs another worker; 'escalate' when the acceptance itself is ambiguous or a human decision is required. score: your 0-100 overall impression, recorded but not gated on. revision_brief: one paragraph for the host, or empty.",
+  "irreversible_globs": [
+    "drizzle/**",
+    "data/**",
+    ".git/hooks/**",
+    ".claude/settings*",
+    "scripts/apply-*"
+  ]
+}
