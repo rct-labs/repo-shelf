@@ -259,7 +259,7 @@ public sealed class DiscoveryStoreTests : IAsyncLifetime
     {
         var settings = (await Call(HttpMethod.Get, "/api/settings"))["data"]!;
         Assert.True(settings["features"]!["discover"]!.GetValue<bool>());
-        foreach (var path in new[] { "/api/projects/1/profile", "/api/discovery/runs", "/api/repos/1/recommendations", "/api/projects/999999999999999999999" })
+        foreach (var path in new[] { "/api/projects/1/profile", "/api/discovery/candidates/1/2/accept", "/api/repos/1/recommendations", "/api/projects/999999999999999999999" })
             await Call(HttpMethod.Post, path, status: HttpStatusCode.NotFound);
     }
 
