@@ -113,6 +113,7 @@ export function mount(root, ctx) {
     generating: new Set(), // project ids with a profile call in flight
     drafts: new Map(), // project id -> { needs, queries } unsaved textarea text
   };
+  let addForm = null;
 
   function explain(err) {
     if (err.code === 'ai_not_configured') return t('aiNotConfigured');
@@ -334,14 +335,12 @@ export function mount(root, ctx) {
   }
 
   function render() {
-    // Keep what the owner is typing in the add form across re-renders.
-    const name = root.querySelector('#project-name')?.value ?? '';
-    const path = root.querySelector('#project-path')?.value ?? '';
+    // The add form is built once and re-attached, so a load that finishes while
+    // the owner is typing or clicking "Add" never swaps the element under them.
+    addForm ??= renderAddForm();
     root.innerHTML = '';
     const wrap = el('div', 'projects');
-    wrap.append(el('h2', 'projects-title', t('projectsTitle')), el('p', 'hint', t('projectsIntro')), renderAddForm());
-    wrap.querySelector('#project-name').value = name;
-    wrap.querySelector('#project-path').value = path;
+    wrap.append(el('h2', 'projects-title', t('projectsTitle')), el('p', 'hint', t('projectsIntro')), addForm);
     if (state.error) {
       wrap.append(el('div', 'state-block', explain(state.error)));
     } else if (state.loaded && state.projects.length === 0) {
@@ -364,6 +363,7 @@ export function mount(root, ctx) {
       state.active = false;
     },
     rerender() {
+      addForm = null; // language changed: rebuild labels
       if (state.active) render();
     },
     refresh: load,

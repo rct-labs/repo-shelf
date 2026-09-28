@@ -22,23 +22,25 @@
 
 ## 2. Now
 
-- Work package `docs/work/discover/` (brief + spec rev 1) and queue DISC-1..9
-  written; nothing implemented yet. Stage: development.
-- Delivery budget: started 2026-09-28; allowance 12 h wall-clock of runner time
-  across restarts; spent 0 h. One package review (judge) at the end of the queue.
-- Tree: REQUIREMENTS.md rev 2, new `scripts/verify.mjs`, `.gate/`, CONTEXT.md,
-  TASK_QUEUE.md, docs/work/discover/ — to be committed before the run.
+- Work package `docs/work/discover/` delivered: DISC-1..9 DONE in run
+  20260928-060933 (queue_empty, ~85 min). Package review: pass (fable, 88),
+  5 low findings in `REVIEW-NOTES.md` (backlog, none blocking).
+- Delivery acceptance: `flow verify --stage delivery` PASS (238 tests);
+  `node tests/e2e/smoke.mjs` PASS; `node tests/e2e/discover.mjs` PASS 5/5 after
+  a host fix: projects tab re-rendered the add form during an in-flight load,
+  so a click could land on a detached button (1 of 3 runs failed before).
+- Delivery budget: started 2026-09-28; 12 h allowance; about 1.6 h used.
 
 ## 3. Last stable checkpoint
 
-- 2fb64bf — 76 .NET + 57 Node tests green (`node scripts/verify.mjs` →
-  `133 passed`); `node tests/e2e/smoke.mjs` → ALL CHECKS PASSED.
+- HEAD after the projects-form race fix; verified by `node scripts/verify.mjs`
+  (238 passed) and both e2e scripts.
 
 ## 4. Next step
 
-- Run the queue from DISC-1 (flow-run). Module checkpoint after DISC-5
-  (`node scripts/verify.mjs --dotnet-only`); delivery after DISC-9 (full
-  verify + `delivery.integration_cmd`).
+- Owner trial on real projects: publish (`dotnet publish app/RepoShelf -c Release`),
+  add Augur/AugurNext/Navo/alltom in the Projects tab, generate profiles,
+  review need statements, "Run now". Then optionally batch the 5 low findings.
 
 ## 5. Waiting on a human
 
