@@ -25,6 +25,7 @@ public sealed class DeepSeekClient
     }
 
     public bool IsConfigured => !string.IsNullOrEmpty(_getKey());
+    public string Model => _model;
 
     /// <summary>Summarize a repository. Throws ServiceException on failure.</summary>
     public async Task<(string Content, string Model)> SummarizeAsync(JsonObject repo, string lang, CancellationToken cancel = default)
@@ -66,7 +67,55 @@ public sealed class DeepSeekClient
                 new JsonObject { ["role"] = "system", ["content"] = system },
                 new JsonObject { ["role"] = "user", ["content"] = user }),
         };
+        var content = await SendAsync(key, payload, cancel);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new ServiceException("ai_error", 502, "DeepSeek returned an empty summary", retryable: true);
+        }
+        return (content.Trim(), _model);
+    }
 
+    /// <summary>
+    /// Generic JSON-mode chat call. The prompt must mention "json" (DeepSeek
+    /// requirement for response_format json_object). Throws ServiceException;
+    /// a reply that is not a JSON object is <c>ai_invalid_response</c>.
+    /// </summary>
+    public async Task<JsonObject> ChatJsonAsync(string system, string user, CancellationToken cancel = default)
+    {
+        var key = _getKey();
+        if (string.IsNullOrEmpty(key))
+        {
+            throw new ServiceException("ai_not_configured", 400, "DeepSeek API key is not configured. Set it in Settings.");
+        }
+        var payload = new JsonObject
+        {
+            ["model"] = _model,
+            ["temperature"] = 0.2,
+            ["response_format"] = new JsonObject { ["type"] = "json_object" },
+            ["messages"] = new JsonArray(
+                new JsonObject { ["role"] = "system", ["content"] = system },
+                new JsonObject { ["role"] = "user", ["content"] = user }),
+        };
+        var content = (await SendAsync(key, payload, cancel) ?? "").Trim();
+        // Tolerate a markdown fence around the object even in JSON mode.
+        if (content.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLine = content.IndexOf('\n');
+            var lastFence = content.LastIndexOf("```", StringComparison.Ordinal);
+            content = firstLine >= 0 && lastFence > firstLine ? content[(firstLine + 1)..lastFence].Trim() : "";
+        }
+        try
+        {
+            if (JsonNode.Parse(content) is JsonObject result) return result;
+        }
+        catch (JsonException)
+        {
+        }
+        throw new ServiceException("ai_invalid_response", 502, "DeepSeek did not return a valid JSON object", retryable: true);
+    }
+
+    private async Task<string?> SendAsync(string key, JsonObject payload, CancellationToken cancel)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         req.Content = new StringContent(payload.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
@@ -94,13 +143,15 @@ public sealed class DeepSeekClient
             {
                 throw new ServiceException("ai_error", 502, $"DeepSeek responded with HTTP {(int)res.StatusCode}", retryable: (int)res.StatusCode >= 500);
             }
-            using var doc = await JsonDocument.ParseAsync(await res.Content.ReadAsStreamAsync(cancel), cancellationToken: cancel);
-            var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
-            if (string.IsNullOrWhiteSpace(content))
+            try
             {
-                throw new ServiceException("ai_error", 502, "DeepSeek returned an empty summary", retryable: true);
+                using var doc = await JsonDocument.ParseAsync(await res.Content.ReadAsStreamAsync(cancel), cancellationToken: cancel);
+                return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
             }
-            return (content.Trim(), _model);
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+            {
+                throw new ServiceException("ai_invalid_response", 502, "DeepSeek returned an unexpected response shape", retryable: true);
+            }
         }
     }
 }
