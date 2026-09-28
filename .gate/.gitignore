@@ -1,2 +1,7 @@
 verdict.json
 *.tmp
+journal.ndjson
+runs/
+RUN-REPORT*.md
+tool-status.json
+watch-journal.cursor.json
