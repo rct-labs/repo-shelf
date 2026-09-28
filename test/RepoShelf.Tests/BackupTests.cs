@@ -8,6 +8,133 @@ namespace RepoShelf.Tests;
 /// <summary>Export/restore round-trip and credential exclusion.</summary>
 public class BackupTests
 {
+    private static BackupService Backup(Store store) =>
+        new(store, new RepoService(store, new GitHubClient(baseUrl: "http://unused")));
+
+    private static void SeedDiscovery(Store store)
+    {
+        using var cmd = store.Conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO projects VALUES (42, 'Project', '/offline/project', 1,
+              '["need 中文"]', '["search"]', '["C#"]', '["xunit"]', '["README.md"]',
+              'profile time', 'created time', 'updated time');
+            INSERT INTO projects (id, name, path, created_at, updated_at)
+              VALUES (43, 'Unprofiled', '/offline/other', 'created', 'updated');
+            """;
+        cmd.ExecuteNonQuery();
+        foreach (var state in new[] { "pending", "later", "accepted", "dismissed" })
+        {
+            cmd.CommandText = """
+                INSERT INTO discovery_candidates VALUES
+                  (42, $id, 'o/repo', 'https://github.com/o/repo', 'description', 'Go', 'MIT',
+                   123, 12.5, 'pushed', 'upstream created', 85, 'need 中文', 'low', 'AI reason',
+                   'zh', 'model', $state, $dismiss, 'run', 'proposed', $decided);
+                """;
+            cmd.Parameters.Clear();
+            cmd.Parameters.AddWithValue("$id", Array.IndexOf(new[] { "pending", "later", "accepted", "dismissed" }, state) + 100);
+            cmd.Parameters.AddWithValue("$state", state);
+            cmd.Parameters.AddWithValue("$dismiss", state == "dismissed" ? "too_heavy" : DBNull.Value);
+            cmd.Parameters.AddWithValue("$decided", state == "pending" ? DBNull.Value : "decided");
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    [Fact]
+    public void V2RoundTripsAllDiscoveryFieldsAndStatesWithoutLibraryPollution()
+    {
+        using var source = Store.Open(":memory:");
+        SeedDiscovery(source);
+        var exported = Backup(source).Export();
+        Assert.Equal(2, exported["version"]!.GetValue<int>());
+        Assert.Equal(2, exported["projects"]!.AsArray().Count);
+        Assert.Equal(4, exported["discoveryCandidates"]!.AsArray().Count);
+        Assert.Equal("need 中文", exported["projects"]![0]!["needs"]![0]!.GetValue<string>());
+        Assert.Equal(12.5, exported["discoveryCandidates"]![0]!["starsPerMonth"]!.GetValue<double>());
+        using var target = Store.Open(":memory:");
+        var backup = Backup(target);
+        backup.Import(JsonNode.Parse(exported.ToJsonString()));
+        var restored = backup.Export();
+        // Local project ids may change; compare all persisted fields and associations.
+        for (var i = 0; i < 2; i++) exported["projects"]![i]!["id"] = restored["projects"]![i]!["id"]!.DeepClone();
+        foreach (var candidate in exported["discoveryCandidates"]!.AsArray())
+            candidate!["projectId"] = restored["projects"]![0]!["id"]!.DeepClone();
+        Assert.True(JsonNode.DeepEquals(exported["projects"], restored["projects"]));
+        Assert.True(JsonNode.DeepEquals(exported["discoveryCandidates"], restored["discoveryCandidates"]));
+        Assert.Empty(restored["repos"]!.AsArray());
+    }
+
+    [Fact]
+    public void DiscoveryMergeAndOverwriteRemapProjectIdsAndKeepUnrelatedData()
+    {
+        using var source = Store.Open(":memory:");
+        SeedDiscovery(source);
+        var payload = Backup(source).Export();
+        using var target = Store.Open(":memory:");
+        using var cmd = target.Conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO projects (id, name, path, created_at, updated_at) VALUES
+              (42, 'Unrelated', '/unrelated', 'now', 'now'),
+              (99, 'Project', '/current', 'now', 'now');
+            INSERT INTO discovery_candidates (project_id, github_id, state, proposed_at)
+              VALUES (99, 100, 'later', 'now');
+            """;
+        cmd.ExecuteNonQuery();
+        var backup = Backup(target);
+        backup.Import(payload);
+        backup.Import(payload);
+        Assert.Equal("/current", new DiscoveryStore(target).GetProject(99)!["path"]!.GetValue<string>());
+        var candidates = backup.Export()["discoveryCandidates"]!.AsArray();
+        Assert.Equal(4, candidates.Count);
+        Assert.All(candidates, c => Assert.Equal(99, c!["projectId"]!.GetValue<long>()));
+        Assert.Equal("later", candidates[0]!["state"]!.GetValue<string>());
+        backup.Import(payload, "overwrite");
+        Assert.Equal("/offline/project", new DiscoveryStore(target).GetProject(99)!["path"]!.GetValue<string>());
+        Assert.Equal("pending", backup.Export()["discoveryCandidates"]![0]!["state"]!.GetValue<string>());
+        Assert.Equal("Unrelated", new DiscoveryStore(target).GetProject(42)!["name"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void InvalidDiscoveryReferenceRollsBackDiscoveryChanges()
+    {
+        using var source = Store.Open(":memory:");
+        SeedDiscovery(source);
+        var payload = Backup(source).Export();
+        payload["discoveryCandidates"]![3]!["projectId"] = 999;
+        using var target = Store.Open(":memory:");
+        var backup = Backup(target);
+        var error = Assert.Throws<BackupService.BackupException>(() => backup.Import(payload));
+        Assert.Equal("invalid_backup", error.Code);
+        Assert.Empty(backup.Export()["projects"]!.AsArray());
+        Assert.Empty(backup.Export()["discoveryCandidates"]!.AsArray());
+    }
+
+    [Theory]
+    [InlineData("{\"app\":\"repo-shelf\",\"version\":0,\"repos\":[]}")]
+    [InlineData("{\"app\":\"repo-shelf\",\"version\":2,\"repos\":[]}")]
+    [InlineData("{\"app\":\"repo-shelf\",\"version\":2,\"repos\":[],\"projects\":[],\"discoveryCandidates\":{}}")]
+    public void InvalidVersionOrDiscoveryArraysAreRejected(string json)
+    {
+        using var store = Store.Open(":memory:");
+        Assert.Equal("invalid_backup", Assert.Throws<BackupService.BackupException>(
+            () => Backup(store).Import(JsonNode.Parse(json))).Code);
+    }
+
+    [Fact]
+    public void V1RestoresIntoEmptyDatabaseAndLeavesDiscoveryUntouched()
+    {
+        using var store = Store.Open(":memory:");
+        var backup = Backup(store);
+        var payload = JsonNode.Parse("""{"app":"repo-shelf","version":1,"repos":[{"githubId":1,"fullName":"o/legacy","readme":"legacy"}]}""");
+        Assert.Equal(1, backup.Import(payload)["added"]!.GetValue<int>());
+        Assert.Empty(new DiscoveryStore(store).ListProjects());
+        SeedDiscovery(store);
+        var before = backup.Export();
+        backup.Import(payload, "overwrite");
+        var after = backup.Export();
+        Assert.True(JsonNode.DeepEquals(before["projects"], after["projects"]));
+        Assert.True(JsonNode.DeepEquals(before["discoveryCandidates"], after["discoveryCandidates"]));
+    }
+
     private static RepoMeta Meta(long id, string name) =>
         new(id, "o", name, $"o/{name}", $"https://github.com/o/{name}", $"desc {name}", new() { "t1", "t2" }, "Go", "MIT", false, "2026-09-01T00:00:00Z", 5, "main");
 

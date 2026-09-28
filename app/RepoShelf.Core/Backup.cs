@@ -10,7 +10,118 @@ namespace RepoShelf.Core;
 /// </summary>
 public sealed class BackupService
 {
-    public const int BackupVersion = 1;
+    public const int BackupVersion = 2;
+
+    // Explicit persisted fields keep derived counts and credentials out of backups.
+    private static readonly string[] ProjectColumns =
+        "id name path paused needs queries languages dependencies profile_files profiled_at created_at updated_at".Split(' ');
+    private static readonly string[] CandidateColumns =
+        "project_id github_id full_name html_url description language license_id stars stars_per_month pushed_at created_at_upstream score matched_need cost reason reason_lang model state dismiss_reason run_id proposed_at decided_at".Split(' ');
+    private static readonly HashSet<string> ArrayColumns =
+        new() { "needs", "queries", "languages", "dependencies", "profile_files" };
+
+    private static string JsonName(string column)
+    {
+        var parts = column.Split('_');
+        return parts[0] + string.Concat(parts.Skip(1).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
+    }
+
+    private JsonArray ExportRows(string table, string[] columns, string order)
+    {
+        using var cmd = _store.Conn.CreateCommand();
+        cmd.CommandText = $"SELECT {string.Join(",", columns)} FROM {table} ORDER BY {order}";
+        using var reader = cmd.ExecuteReader();
+        var rows = new JsonArray();
+        while (reader.Read())
+        {
+            var row = new JsonObject();
+            for (var i = 0; i < columns.Length; i++)
+            {
+                var column = columns[i];
+                row[JsonName(column)] = reader.IsDBNull(i) ? null
+                    : ArrayColumns.Contains(column) ? JsonNode.Parse(reader.GetString(i))
+                    : column == "paused" ? JsonValue.Create(reader.GetInt64(i) != 0)
+                    : JsonSerializer.SerializeToNode(reader.GetValue(i));
+            }
+            rows.Add(row);
+        }
+        return rows;
+    }
+
+    private void ImportDiscovery(JsonArray projects, JsonArray candidates, string mode)
+    {
+        lock (_store.Sync)
+        {
+            using var transaction = _store.Conn.BeginTransaction();
+            var projectIds = new Dictionary<long, long>();
+            long Integer(JsonObject row, string key) => row[key] is JsonValue v && v.TryGetValue<long>(out var n)
+                ? n : throw new BackupException("invalid_backup", $"{key} must be an integer");
+
+            void Write(string table, string[] columns, JsonObject row, string conflict)
+            {
+                using var cmd = _store.Conn.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = $"INSERT INTO {table} ({string.Join(",", columns)}) VALUES ({string.Join(",", columns.Select(c => "$" + c))}) ON CONFLICT({conflict}) "
+                    + (mode == "merge" ? "DO NOTHING" : "DO UPDATE SET " + string.Join(",", columns.Select(c => $"{c}=excluded.{c}")));
+                foreach (var column in columns)
+                {
+                    var node = row[JsonName(column)];
+                    object value = DBNull.Value;
+                    if (ArrayColumns.Contains(column))
+                    {
+                        if (node is not JsonArray array || array.Any(x => x is not JsonValue v || !v.TryGetValue<string>(out _)))
+                            throw new BackupException("invalid_backup", $"{JsonName(column)} must be an array of strings");
+                        value = array.ToJsonString();
+                    }
+                    else if (node is JsonValue scalar)
+                    {
+                        if (scalar.TryGetValue<string>(out var s)) value = s;
+                        else if (scalar.TryGetValue<bool>(out var b)) value = b ? 1 : 0;
+                        else if (scalar.TryGetValue<long>(out var n)) value = n;
+                        else if (scalar.TryGetValue<double>(out var d)) value = d;
+                        else throw new BackupException("invalid_backup", $"Invalid {JsonName(column)}");
+                    }
+                    else if (node is not null) throw new BackupException("invalid_backup", $"Invalid {JsonName(column)}");
+                    cmd.Parameters.AddWithValue("$" + column, value);
+                }
+                cmd.ExecuteNonQuery();
+            }
+
+            try
+            {
+                foreach (var node in projects)
+                {
+                    if (node is not JsonObject project || project["name"] is not JsonValue nameValue
+                        || !nameValue.TryGetValue<string>(out var name) || string.IsNullOrWhiteSpace(name))
+                        throw new BackupException("invalid_backup", "Project must have a name");
+                    var sourceId = Integer(project, "id");
+                    if (projectIds.ContainsKey(sourceId)) throw new BackupException("invalid_backup", "Duplicate project id");
+                    // Names are unique across a library; source ids are local to its database.
+                    Write("projects", ProjectColumns[1..], project, "name");
+                    using var find = _store.Conn.CreateCommand();
+                    find.Transaction = transaction;
+                    find.CommandText = "SELECT id FROM projects WHERE name = $name";
+                    find.Parameters.AddWithValue("$name", name);
+                    projectIds.Add(sourceId, (long)find.ExecuteScalar()!);
+                }
+                foreach (var node in candidates)
+                {
+                    if (node is not JsonObject candidate) throw new BackupException("invalid_backup", "Invalid candidate");
+                    if (!projectIds.TryGetValue(Integer(candidate, "projectId"), out var localId))
+                        throw new BackupException("invalid_backup", "Candidate references a missing project");
+                    Integer(candidate, "githubId");
+                    var mapped = (JsonObject)candidate.DeepClone();
+                    mapped["projectId"] = localId;
+                    Write("discovery_candidates", CandidateColumns, mapped, "project_id,github_id");
+                }
+                transaction.Commit();
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
+            {
+                throw new BackupException("invalid_backup", "Invalid discovery data: " + ex.Message);
+            }
+        }
+    }
 
     public sealed class BackupException(string code, string message) : Exception(message)
     {
@@ -29,8 +140,12 @@ public sealed class BackupService
     public JsonObject Export()
     {
         var repos = new JsonArray();
+        JsonArray projects;
+        JsonArray candidates;
         lock (_store.Sync)
         {
+            projects = ExportRows("projects", ProjectColumns, "id");
+            candidates = ExportRows("discovery_candidates", CandidateColumns, "project_id,github_id");
             using var cmd = _store.Conn.CreateCommand();
             cmd.CommandText = """
                 SELECT r.*, a.reason, a.notes,
@@ -107,6 +222,8 @@ public sealed class BackupService
             ["version"] = BackupVersion,
             ["exportedAt"] = DateTime.UtcNow.ToString("O"),
             ["repos"] = repos,
+            ["projects"] = projects,
+            ["discoveryCandidates"] = candidates,
         };
     }
 
@@ -124,6 +241,9 @@ public sealed class BackupService
         {
             throw new BackupException("unsupported_version", $"Backup version {version} is newer than supported version {BackupVersion}");
         }
+        if (version < 1) throw new BackupException("invalid_backup", "Backup version must be 1 or 2");
+        if (version == 2 && (root["projects"] is not JsonArray || root["discoveryCandidates"] is not JsonArray))
+            throw new BackupException("invalid_backup", "Version 2 requires projects and discoveryCandidates arrays");
         if (root["repos"] is not JsonArray items)
         {
             throw new BackupException("invalid_backup", "Export file has no repos array");
@@ -257,6 +377,8 @@ public sealed class BackupService
                 }
             }
         }
+        if (version == 2)
+            ImportDiscovery(root["projects"]!.AsArray(), root["discoveryCandidates"]!.AsArray(), mode);
         return new JsonObject
         {
             ["added"] = added,
