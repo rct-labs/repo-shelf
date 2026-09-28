@@ -8,7 +8,7 @@
 
 | # | ID | name | status | start baseline | end baseline | worker |
 |---|---|---|---|---|---|---|
-| 1 | DISC-1 | Discovery data + projects API — tables, DiscoveryStore, projects CRUD, features flag, route registry + host feature bag (spec Data/HTTP/Extension points) | `TODO` | 133 passed | | codex |
+| 1 | DISC-1 | Discovery data + projects API — tables, DiscoveryStore, projects CRUD, features flag, route registry + host feature bag (spec Data/HTTP/Extension points) | `IN_PROGRESS` | 133 passed | | codex |
 | 2 | DISC-2 | Project profile — whitelist reader, DeepSeek ChatJsonAsync, POST /api/projects/{id}/profile (spec Profile; acc. 11) | `TODO` | | | claude |
 | 3 | DISC-3 | Recall — GitHub search client, budgeted recall, exclusion, stars-per-month shortlist, rate-limit stop (spec Recall; acc. 12) | `TODO` | | | codex |
 | 4 | DISC-4 | Scoring + runner — DeepSeek scorer, background run, weekly scheduler, run/candidates API, NewCandidates event (spec Scoring/Runner; acc. 13) | `TODO` | | | claude |
