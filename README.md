@@ -20,6 +20,18 @@ no cloud account, no AI service, no telemetry.
 - **AI summaries (optional)**: a stored DeepSeek key lets the app summarize a
   repository from its metadata and README. Summaries live in a separate
   `generated` table — they never overwrite your own reason and notes.
+- **Recommendations per project (optional, desktop)**: register local
+  projects in the Projects tab; one explicit click sends a fixed whitelist of
+  files (README, AGENTS.md, CONTEXT.md, open TASK_QUEUE.md rows, manifest
+  dependency names — never `.env`, `memory/`, `data/`, `config/`) to DeepSeek
+  to draft editable need statements and search queries. Weekly (or on "Run
+  now"), the app searches GitHub within a fixed quota and proposes at most 5
+  repositories per project, each with the need it matches, a score and a
+  short AI rationale. Triage by keyboard in the Recommendations tab: `j`/`k`
+  move, `a` accept (saved to the library with the project label and status
+  To investigate), `s` later, `d` dismiss with a reason. Candidates stay out
+  of library search until accepted; dismissed ones are never proposed again
+  for that project.
 - **Import from Chrome bookmarks**: reads the Chromium bookmarks file
   (read-only) and imports the GitHub repositories found there.
 - **Personal knowledge**: reason, notes, tags, related-project labels and a
@@ -144,7 +156,16 @@ dotnet run --project tools/RepoShelf.PerfCheck -c Release   # 5,000-repo latency
 pnpm test                                # 56 unit/integration tests (hermetic)
 pnpm test:e2e                            # browser smoke against the Node service
 pnpm test:e2e:desktop                    # browser smoke against the published .NET exe
+pnpm test:e2e:discover                   # discovery e2e: desktop --service + fake GitHub/DeepSeek
+node scripts/verify.mjs                  # all .NET + Node tests, one "N passed" line
 ```
+
+`test:e2e:discover` builds `app/RepoShelf` (Release) unless
+`REPO_SHELF_SERVER_BIN` points at an exe, starts it with `--service` against
+local fake GitHub and DeepSeek servers (`REPO_SHELF_GITHUB_API`,
+`REPO_SHELF_DEEPSEEK_API`), and in headless Chromium adds a project,
+generates its profile, runs discovery, triages with `a`/`s`/`d` and finds the
+accepted repository in the Library tab. It needs no network or real keys.
 
 `test:e2e*` launches Playwright's Chromium build, loads the extension,
 captures a repository through the popup, exercises the offline pending queue,

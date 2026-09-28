@@ -12,7 +12,8 @@
     "test": "node --test \"tests/**/*.test.js\"",
     "test:e2e": "node tests/e2e/smoke.mjs",
     "test:e2e:desktop": "set REPO_SHELF_SERVER_BIN=%CD%\\app\\RepoShelf\\bin\\Release\\net10.0-windows\\win-x64\\publish\\RepoShelf.exe&& node tests/e2e/smoke.mjs",
-    "perf": "node tests/perf/run-perf.js"
+    "test:e2e:discover": "node tests/e2e/discover.mjs",
+    "perf":"node tests/perf/run-perf.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

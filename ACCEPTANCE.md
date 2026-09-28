@@ -147,6 +147,27 @@ measures 54.7 ms overall p95 on the same dataset shape
   this machine: 20 added + 1 existing + 15 deferred by GitHub's
   unauthenticated rate limit (re-runnable after reset or with a token).
 
+## Revision 2 — project-driven discovery (acceptance 11–16)
+
+Measured on 2026-09-28. All discovery checks use a fake GitHub API and a fake
+DeepSeek endpoint (`REPO_SHELF_GITHUB_API` / `REPO_SHELF_DEEPSEEK_API`);
+fixtures are synthetic (`fakeorg/*`, temporary project folders).
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 11 | Add sends nothing; profile reads only the whitelist | `DiscoveryStoreTests` (schema, CRUD, no network on add); `ProjectProfilerTests.CollectOpensOnlyWhitelistedFilesAndListsExactlyThose` (fixture with `.env`, `memory/x.md`, `data/y.db`, `config/z.yaml`, `src/a.py` → none read), `QueueRowsWithoutStatusHeaderDropDoneRows`, `AddingAProjectSendsNothingAndProfileStoresEditableResult`. e2e: `PASS adding a project calls no upstream`, `PASS profile read exactly README.md and package.json`, `PASS .env and memory/ never sent` |
+| 12 | Per-run GitHub budget | `DiscoveryRecallTests` (≤4 searches/project, no retries, READMEs for the top 10 only, saved/dismissed repos excluded before any request). e2e: `PASS GitHub search requests within budget`, `PASS READMEs fetched only for the shortlist` |
+| 13 | ≤5 per project, score ≥60, malformed reply tolerated, rate-limit stop | `DiscoveryRunTests.RunKeepsAtMostFiveScoresOfSixtyOrMoreAndSurvivesMalformedReplies`, `RateLimitStopsTheRunKeepsScoredItemsAndRecordsTheResetTime`, `ScheduleHonoursSevenDaysWithAnInjectedClock`; `DiscoveryRecallTests.SearchRateLimitStopsImmediatelyAndPreservesResetMetadata`. e2e: `PASS feed shows only scores >= 60, best first`, `PASS run finished done despite one malformed AI reply` |
+| 14 | Accept = one record, label, To investigate, reason/notes untouched; dismiss excluded; pending never searchable | `DiscoveryTriageTests.AcceptUsesSavePathCreatesOneLibraryRepoAndKeepsAiOutOfPersonalFields`, `DismissedRepoIsExcludedFromNextRunForThatProjectOnly`. e2e: `PASS library holds exactly the accepted repo`, `PASS accepted repo labelled with the project`, `PASS accepted repo status to_investigate`, `PASS AI output left reason and notes empty`, `PASS pending candidates never appear in library search` |
+| 15 | Backup keeps projects, needs and decisions | `BackupTests` — v2 round-trip including projects and candidates in every state; a v1 file still restores |
+| 16a | Browser test on the desktop service, keyboard triage | `node tests/e2e/discover.mjs` (`pnpm test:e2e:discover`): builds `app/RepoShelf`, runs `RepoShelf.exe --service`, then in headless Chromium adds a project, generates the profile, clicks Run now, presses `a` / `s` / `d`+`2` → `PASS alpha accepted`, `PASS beta later`, `PASS gamma dismissed with reason`, `PASS accepted repo visible in Library tab`, `[discover] ALL CHECKS PASSED` |
+| 16b | Node smoke unchanged, discovery hidden | `node tests/e2e/smoke.mjs` → `ALL CHECKS PASSED` (Node reference exposes no `features.discover`, so only the Library is shown) |
+
+Full oracle: `node scripts/verify.mjs` (all .NET + Node tests, one `N passed`
+line). Honest limitation: the tray balloon on `NewCandidates` and the
+900×640 feed window size are desktop-shell behaviour not covered by the
+`--service` e2e; they were checked by code review only.
+
 ## Command reference
 
 ```powershell
@@ -158,5 +179,7 @@ dotnet run --project tools/RepoShelf.PerfCheck -c Release   # perf
 pnpm install && pnpm start             # Node reference web app
 pnpm test                              # 56 Node tests
 pnpm test:e2e / pnpm test:e2e:desktop  # browser smoke (Node / .NET backend)
+pnpm test:e2e:discover                 # discovery e2e (desktop --service, fake GitHub/DeepSeek)
+node scripts/verify.mjs                # all .NET + Node tests
 pnpm perf                              # Node perf harness
 ```

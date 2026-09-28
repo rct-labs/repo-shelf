@@ -16,7 +16,7 @@
 | 6 | DISC-6 | Backup v2 — export/restore projects and candidates, v1 compatibility (spec Backup; acc. 15) | `DONE` | 174 passed (.NET prior task) | 10 passed (gate Backup filter) | codex |
 | 7 | DISC-7 | Feed UI — tabs, recommendations feed, keyboard triage, feed window size, projects.js stub + extendStrings (spec UI/Extension points; acc. 16b) | `DONE` | 174 passed (.NET prior task) | 238 passed (gate DISC-7) | claude |
 | 8 | DISC-8 | Projects UI + tray — projects tab, profile privacy note, editable needs, tray notification (spec UI) | `DONE` | 238 passed (gate DISC-7) | 238 passed (gate DISC-8) | claude |
-| 9 | DISC-9 | Delivery — discover e2e with fake GitHub/DeepSeek on desktop service, README/ARCHITECTURE/ACCEPTANCE (acc. 16a) | `IN_PROGRESS` | 238 passed (gate DISC-8) | | claude |
+| 9 | DISC-9 | Delivery — discover e2e with fake GitHub/DeepSeek on desktop service, README/ARCHITECTURE/ACCEPTANCE (acc. 16a) | `DONE` | 238 passed (gate DISC-8) | 238 passed (gate DISC-9) | claude |
 
 <!-- task:DISC-1 files: app/RepoShelf.Core/Store.cs, app/RepoShelf.Core/DiscoveryStore.cs, app/RepoShelf.Core/DiscoveryApi.cs, app/RepoShelf.Core/HttpApi.cs, app/RepoShelf.Core/ServiceHost.cs, test/RepoShelf.Tests/DiscoveryStoreTests.cs -->
 <!-- task:DISC-1 spec: docs/work/discover/spec.md -->

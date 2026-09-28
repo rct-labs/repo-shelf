@@ -64,6 +64,49 @@ omnibox lookup.
   metadata and personal annotations) and included in exports. The UI marks
   them clearly as AI-generated.
 
+## Discovery (desktop only)
+
+Weekly, per registered local project, at most 5 GitHub repositories that
+address one of the project's need statements (REQUIREMENTS §6; contract in
+`docs/work/discover/spec.md`).
+
+```
+Projects tab ──► POST /api/projects/{id}/profile ──► ProjectProfiler
+                   (explicit click; whitelist only)      └─► DeepSeek: needs, queries, languages
+DiscoveryRunner (manual / weekly scheduler)
+  per active profiled project:
+    DiscoveryRecall ── ≤4 searches ──► GitHub /search/repositories
+                    └─ drop saved + any candidate of this project, rank stars/month, top 10
+                    └─ README for the shortlist only
+    DiscoveryScorer ── 1 JSON call per repo ──► DeepSeek (README fenced as untrusted)
+    keep score ≥ 60, top 5 ──► discovery_candidates (pending) ──► NewCandidates → tray balloon
+Recommendations tab ── a / s / d ──► DiscoveryTriage: accept (RepoService save,
+                                     project label, to_investigate) / later / dismiss(reason)
+```
+
+- Storage: `projects`, `discovery_candidates` (PK project_id + github_id, so
+  one repo can be proposed to two projects), `discovery_runs`. Nothing is added
+  to `repos`, `annotations`, `search_fts` or `generated`: candidates never
+  appear in library search, counts or filters until accepted, and AI
+  rationale never touches reason/notes. Backup v2 carries projects and
+  candidates; v1 files still restore.
+- Privacy: adding a project sends nothing. Profiling reads only README*,
+  AGENTS.md, CONTEXT.md, non-DONE TASK_QUEUE.md rows and manifest dependency
+  names; it never opens `.env*`, `memory/`, `data/`, `config/`, `.git/` or
+  `node_modules/`. The UI lists exactly which files were read.
+- Quota: per-run budget constants (4 queries, 30 results, 10 READMEs per
+  project), no retries on search; a GitHub rate limit stops the run with its
+  reset time and keeps already-scored candidates. A malformed AI reply rejects
+  that item only.
+- Wiring: `DiscoveryApi` dispatches `/api/projects*`, `/api/discovery*` and
+  `/api/repos/{id}/recommendations` to modules that self-register through
+  `[ModuleInitializer]`; `ServiceHost.Feature<T>()` holds one instance per
+  host. `GET /api/settings` reports `features.discover: true`; the Node
+  reference omits it, so the web UI hides the Recommendations and Projects tabs
+  there.
+- Test hooks: `REPO_SHELF_GITHUB_API` and `REPO_SHELF_DEEPSEEK_API` point the
+  service at fakes; `tests/e2e/discover.mjs` uses both.
+
 ## Identity and storage
 
 - The **GitHub repository id** is the durable identity (`repos.github_id`,
@@ -157,6 +200,12 @@ extension id is stable across reinstalls and test runs.
   Playwright Chromium against either backend; capture through the popup,
   offline pending + retry after recovery, Chinese search in the UI, hostile
   README fixture rendered inertly, language switch.
+- Discovery (`DiscoveryStoreTests`, `ProjectProfilerTests`,
+  `DiscoveryRecallTests`, `DiscoveryRunTests`, `DiscoveryTriageTests`,
+  `BackupTests`) with fake GitHub and fake DeepSeek servers; end to end,
+  `pnpm test:e2e:discover` builds the desktop exe, runs it with `--service`
+  against both fakes and drives the Projects and Recommendations tabs in
+  headless Chromium (no real network).
 - Performance: `tools/RepoShelf.PerfCheck` (.NET) and `tests/perf/run-perf.js`
   (Node), 5,000-repo synthetic dataset, warm search latency.
 
