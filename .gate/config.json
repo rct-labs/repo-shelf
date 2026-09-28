@@ -69,7 +69,7 @@
     "expires_at": 0
   },
   "judge": {
-    "enabled": false,
+    "enabled": true,
     "chain": [
       "fable",
       "opus",

@@ -19,37 +19,46 @@
 | 9 | DISC-9 | Delivery — discover e2e with fake GitHub/DeepSeek on desktop service, README/ARCHITECTURE/ACCEPTANCE (acc. 16a) | `TODO` | | | claude |
 
 <!-- task:DISC-1 files: app/RepoShelf.Core/Store.cs, app/RepoShelf.Core/DiscoveryStore.cs, app/RepoShelf.Core/DiscoveryApi.cs, app/RepoShelf.Core/HttpApi.cs, app/RepoShelf.Core/ServiceHost.cs, test/RepoShelf.Tests/DiscoveryStoreTests.cs -->
+<!-- task:DISC-1 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-1 impact: shared -->
 <!-- task:DISC-1 verify: {"cmd": "node scripts/verify.mjs --dotnet-only", "timeout_s": 600} -->
 
 <!-- task:DISC-2 files: app/RepoShelf.Core/ProjectProfiler.cs, app/RepoShelf.Core/DeepSeekClient.cs, test/RepoShelf.Tests/ProjectProfilerTests.cs -->
+<!-- task:DISC-2 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-2 impact: local -->
 <!-- task:DISC-2 verify: {"cmd": "node scripts/verify.mjs --dotnet-only --dotnet-filter \"FullyQualifiedName~Discovery|FullyQualifiedName~ProjectProfiler|FullyQualifiedName~AiAndBookmarks\"", "timeout_s": 600} -->
 
 <!-- task:DISC-3 files: app/RepoShelf.Core/GitHubClient.cs, app/RepoShelf.Core/DiscoveryRecall.cs, test/RepoShelf.Tests/Fakes.cs, test/RepoShelf.Tests/DiscoveryRecallTests.cs -->
+<!-- task:DISC-3 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-3 impact: shared -->
 <!-- task:DISC-3 verify: {"cmd": "node scripts/verify.mjs --dotnet-only", "timeout_s": 600} -->
 
 <!-- task:DISC-4 files: app/RepoShelf.Core/DiscoveryScorer.cs, app/RepoShelf.Core/DiscoveryRunner.cs, test/RepoShelf.Tests/DiscoveryRunTests.cs -->
+<!-- task:DISC-4 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-4 impact: shared -->
 <!-- task:DISC-4 verify: {"cmd": "node scripts/verify.mjs --dotnet-only", "timeout_s": 600} -->
 
 <!-- task:DISC-5 files: app/RepoShelf.Core/DiscoveryTriage.cs, test/RepoShelf.Tests/DiscoveryTriageTests.cs -->
+<!-- task:DISC-5 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-5 impact: local -->
 <!-- task:DISC-5 verify: {"cmd": "node scripts/verify.mjs --dotnet-only", "timeout_s": 600} -->
 
 <!-- task:DISC-6 files: app/RepoShelf.Core/Backup.cs, test/RepoShelf.Tests/BackupTests.cs -->
+<!-- task:DISC-6 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-6 impact: shared -->
 <!-- task:DISC-6 verify: {"cmd": "node scripts/verify.mjs --dotnet-only --dotnet-filter \"FullyQualifiedName~Backup\"", "timeout_s": 600} -->
 
 <!-- task:DISC-7 files: public/index.html, public/app.js, public/discover.js, public/styles.css, public/i18n.js, app/RepoShelf/MainWindow.xaml.cs -->
+<!-- task:DISC-7 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-7 impact: shared -->
 <!-- task:DISC-7 verify: {"cmd": "node tests/e2e/smoke.mjs && node scripts/verify.mjs", "timeout_s": 900} -->
 
 <!-- task:DISC-8 files: public/projects.js, public/projects.css, app/RepoShelf/TrayIcon.cs, app/RepoShelf/App.xaml.cs -->
+<!-- task:DISC-8 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-8 impact: shared -->
 <!-- task:DISC-8 verify: {"cmd": "node tests/e2e/smoke.mjs && node scripts/verify.mjs", "timeout_s": 900} -->
 
 <!-- task:DISC-9 files: tests/e2e/discover.mjs, package.json, README.md, ARCHITECTURE.md, ACCEPTANCE.md -->
+<!-- task:DISC-9 spec: docs/work/discover/spec.md -->
 <!-- task:DISC-9 impact: shared -->
 <!-- task:DISC-9 verify: {"cmd": "node tests/e2e/discover.mjs && node tests/e2e/smoke.mjs && node scripts/verify.mjs", "timeout_s": 1200} -->

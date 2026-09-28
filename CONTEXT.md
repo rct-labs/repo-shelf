@@ -24,6 +24,8 @@
 
 - Work package `docs/work/discover/` (brief + spec rev 1) and queue DISC-1..9
   written; nothing implemented yet. Stage: development.
+- Delivery budget: started 2026-09-28; allowance 12 h wall-clock of runner time
+  across restarts; spent 0 h. One package review (judge) at the end of the queue.
 - Tree: REQUIREMENTS.md rev 2, new `scripts/verify.mjs`, `.gate/`, CONTEXT.md,
   TASK_QUEUE.md, docs/work/discover/ — to be committed before the run.
 
