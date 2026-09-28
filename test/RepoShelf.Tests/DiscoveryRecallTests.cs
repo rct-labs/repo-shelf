@@ -208,7 +208,9 @@ public sealed class DiscoveryRecallTests
         using var http = new HttpClient();
         var project = Project(store, "one", "two", "three");
         fake.SetSearch(Query("one"), new[] { TestRepos.MakeRepo(1) });
-        var reset = Now.AddHours(1);
+        // Wall-clock based: the client computes the wait from the real time, and a
+        // reset an hour away is beyond the bounded wait, so the run must stop.
+        var reset = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds());
         fake.FailNext(path => path.Contains("q=two"), 1, (HttpStatusCode)status,
             new() { ["x-ratelimit-remaining"] = "0", ["x-ratelimit-reset"] = reset.ToUnixTimeSeconds().ToString() });
         var recall = new DiscoveryRecall(store, new GitHubClient(http, baseUrl: fake.BaseUrl), clock: () => Now);
@@ -268,6 +270,30 @@ public sealed class DiscoveryRecallTests
         await Assert.ThrowsAsync<GitHubException>(() => Collect(recall.RecallAsync(project)));
 
         Assert.Equal(2, fake.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ShortSearchRateLimitIsWaitedOutLongOneStops()
+    {
+        using var store = Store.Open(":memory:");
+        using var fake = new FakeGitHubServer();
+        using var http = new HttpClient();
+        var project = Project(store, "search");
+        fake.SetSearch(Query("search"), new[] { TestRepos.MakeRepo(1) });
+        fake.FailNext(path => path.StartsWith("/search/"), 1, HttpStatusCode.Forbidden,
+            new Dictionary<string, string> { ["X-RateLimit-Remaining"] = "0", ["Retry-After"] = "1" });
+        var recall = new DiscoveryRecall(store, new GitHubClient(http, baseUrl: fake.BaseUrl), clock: () => Now);
+
+        var result = await Collect(recall.RecallAsync(project));
+
+        Assert.Single(result);
+
+        fake.FailNext(path => path.StartsWith("/search/"), 1, HttpStatusCode.Forbidden,
+            new Dictionary<string, string> { ["X-RateLimit-Remaining"] = "0", ["Retry-After"] = "3600" });
+        var stopped = await Assert.ThrowsAsync<GitHubException>(() => Collect(
+            new DiscoveryRecall(store, new GitHubClient(http, baseUrl: fake.BaseUrl), clock: () => Now)
+                .RecallAsync(Project(store, "search"))));
+        Assert.Equal("rate_limited", stopped.Code);
     }
 
     [Fact]

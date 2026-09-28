@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Repo Shelf mark: three book spines on a lit shelf, the third leaning out
+       toward a spark — a library that finds things for you. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a22"/>
+      <stop offset="1" stop-color="#060a08"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.78" r="0.62">
+      <stop offset="0" stop-color="#39ff14" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#39ff14" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shelf" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1fae3f"/>
+      <stop offset="0.5" stop-color="#7dff5c"/>
+      <stop offset="1" stop-color="#1fae3f"/>
+    </linearGradient>
+    <linearGradient id="s1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f5a31"/>
+      <stop offset="1" stop-color="#17804a"/>
+    </linearGradient>
+    <linearGradient id="s2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1c9e57"/>
+      <stop offset="1" stop-color="#2ed476"/>
+    </linearGradient>
+    <linearGradient id="s3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c9ffd6"/>
+      <stop offset="1" stop-color="#f2fff4"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#bg)"/>
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#halo)"/>
+  <rect x="5.5" y="5.5" width="245" height="245" rx="56.5" fill="none" stroke="#39ff14" stroke-opacity="0.28" stroke-width="3"/>
+
+  <!-- spines -->
+  <rect x="54" y="96" width="34" height="92" rx="7" fill="url(#s1)"/>
+  <rect x="54" y="110" width="34" height="6" fill="#000" opacity="0.25"/>
+  <rect x="54" y="168" width="34" height="6" fill="#000" opacity="0.25"/>
+
+  <rect x="96" y="68" width="34" height="120" rx="7" fill="url(#s2)"/>
+  <rect x="96" y="84" width="34" height="6" fill="#000" opacity="0.22"/>
+  <rect x="96" y="168" width="34" height="6" fill="#000" opacity="0.22"/>
+
+  <g transform="rotate(20 140 188)">
+    <rect x="140" y="92" width="34" height="96" rx="7" fill="url(#s3)"/>
+    <rect x="140" y="108" width="34" height="6" fill="#0b3d20" opacity="0.35"/>
+    <rect x="140" y="168" width="34" height="6" fill="#0b3d20" opacity="0.35"/>
+  </g>
+
+  <!-- shelf -->
+  <rect x="40" y="188" width="176" height="12" rx="6" fill="url(#shelf)" filter="url(#glow)"/>
+
+  <!-- spark -->
+  <path filter="url(#glow)" fill="#b8ff9e"
+        d="M196 42 C198.5 58 202 61.5 218 64 C202 66.5 198.5 70 196 86 C193.5 70 190 66.5 174 64 C190 61.5 193.5 58 196 42 Z"/>
+  <circle cx="221" cy="96" r="4.5" fill="#39ff14" opacity="0.8"/>
+</svg>

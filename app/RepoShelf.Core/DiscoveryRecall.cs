@@ -16,13 +16,35 @@ public sealed class DiscoveryRecall
     private readonly GitHubClient _github;
     private readonly DiscoveryBudget _budget;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly int _maxRateLimitWaitMs;
 
-    public DiscoveryRecall(Store store, GitHubClient github, DiscoveryBudget? budget = null, Func<DateTimeOffset>? clock = null)
+    /// <param name="maxRateLimitWaitMs">The search API allows only 10 requests/minute
+    /// without a token, so a short rate-limit window is waited out (same bound as
+    /// imports) instead of failing the whole run; longer windows still stop it.</param>
+    public DiscoveryRecall(Store store, GitHubClient github, DiscoveryBudget? budget = null, Func<DateTimeOffset>? clock = null,
+        int maxRateLimitWaitMs = 90_000)
     {
         _store = store;
         _github = github;
         _budget = budget ?? new DiscoveryBudget();
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _maxRateLimitWaitMs = maxRateLimitWaitMs;
+    }
+
+    private async Task<List<RepoMeta>> SearchWithWaitAsync(string q, CancellationToken cancel)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await _github.SearchReposAsync(q, _budget.ResultsPerQuery, cancel);
+            }
+            catch (GitHubException ex) when (ex.Code == "rate_limited" && attempt < 2
+                && ex.RetryAfterMs is { } wait && wait <= _maxRateLimitWaitMs)
+            {
+                await Task.Delay((int)wait + 250, cancel);
+            }
+        }
     }
 
     /// <summary>Elapsed 30-day months, with a one-month floor. ID breaks growth ties reproducibly.</summary>
@@ -67,8 +89,8 @@ public sealed class DiscoveryRecall
         foreach (var query in queries)
         {
             cancel.ThrowIfCancellationRequested();
-            var results = await _github.SearchReposAsync(
-                $"{query}{qualifier} pushed:>={cutoff} archived:false fork:false", _budget.ResultsPerQuery, cancel);
+            var results = await SearchWithWaitAsync(
+                $"{query}{qualifier} pushed:>={cutoff} archived:false fork:false", cancel);
             repos.AddRange(results.Where(repo => !excluded.Contains(repo.GithubId)));
         }
 
