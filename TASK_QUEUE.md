@@ -12,7 +12,7 @@
 | 2 | DISC-2 | Project profile — whitelist reader, DeepSeek ChatJsonAsync, POST /api/projects/{id}/profile (spec Profile; acc. 11) | `DONE` | 104 passed (.NET local) | 42 passed (gate filter) | claude |
 | 3 | DISC-3 | Recall — GitHub search client, budgeted recall, exclusion, stars-per-month shortlist, rate-limit stop (spec Recall; acc. 12) | `DONE` | 118 passed (.NET local) | 134 passed (.NET local) | codex |
 | 4 | DISC-4 | Scoring + runner — DeepSeek scorer, background run, weekly scheduler, run/candidates API, NewCandidates event (spec Scoring/Runner; acc. 13) | `DONE` | 134 passed (.NET local) | 146 passed (.NET local) | claude |
-| 5 | DISC-5 | Triage — accept/later/dismiss endpoints, accept via save path, per-repo recommendations endpoint (spec HTTP; acc. 14) | `TODO` | | | codex |
+| 5 | DISC-5 | Triage — accept/later/dismiss endpoints, accept via save path, per-repo recommendations endpoint (spec HTTP; acc. 14) | `IN_PROGRESS` | 146 passed (.NET local) | | codex |
 | 6 | DISC-6 | Backup v2 — export/restore projects and candidates, v1 compatibility (spec Backup; acc. 15) | `TODO` | | | codex |
 | 7 | DISC-7 | Feed UI — tabs, recommendations feed, keyboard triage, feed window size, projects.js stub + extendStrings (spec UI/Extension points; acc. 16b) | `TODO` | | | claude |
 | 8 | DISC-8 | Projects UI + tray — projects tab, profile privacy note, editable needs, tray notification (spec UI) | `TODO` | | | claude |
