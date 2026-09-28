@@ -106,7 +106,7 @@ public partial class App : Application
             if (_ownsService)
             {
                 _service.Feature(h => new DiscoveryRunner(h)).NewCandidates +=
-                    count => Dispatcher.BeginInvoke(() => _tray?.ShowNewCandidates(count));
+                    count => Dispatcher.BeginInvoke(() => _tray?.ShowNewCandidates(count, DiscoveryRunner.ResolveLang(_service.Store)));
             }
             // Ctrl+Alt+K summons the compact window from anywhere.
             _hotKeys = new HotKeys(() => Dispatcher.Invoke(ShowMainWindow));

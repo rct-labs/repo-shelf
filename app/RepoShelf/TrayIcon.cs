@@ -48,13 +48,15 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>One balloon per discovery run that inserted candidates; clicking it opens the window.</summary>
-    public void ShowNewCandidates(int count)
+    public void ShowNewCandidates(int count, string lang = "en")
     {
         if (count <= 0)
         {
             return;
         }
-        var text = count == 1 ? "1 new recommendation" : $"{count} new recommendations";
+        var text = lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? $"有 {count} 个新推荐"
+            : count == 1 ? "1 new recommendation" : $"{count} new recommendations";
         _icon.ShowBalloonTip(10_000, "Repo Shelf", text, ToolTipIcon.Info);
     }
 

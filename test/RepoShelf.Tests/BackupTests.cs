@@ -100,10 +100,13 @@ public class BackupTests
         SeedDiscovery(source);
         var payload = Backup(source).Export();
         payload["discoveryCandidates"]![3]!["projectId"] = 999;
+        // A repository in the same file must not be restored either: the file is rejected whole.
+        payload["repos"]!.AsArray().Add(JsonNode.Parse("""{"githubId":4242,"fullName":"o/partial","readme":"x"}"""));
         using var target = Store.Open(":memory:");
         var backup = Backup(target);
         var error = Assert.Throws<BackupService.BackupException>(() => backup.Import(payload));
         Assert.Equal("invalid_backup", error.Code);
+        Assert.Empty(backup.Export()["repos"]!.AsArray());
         Assert.Empty(backup.Export()["projects"]!.AsArray());
         Assert.Empty(backup.Export()["discoveryCandidates"]!.AsArray());
     }

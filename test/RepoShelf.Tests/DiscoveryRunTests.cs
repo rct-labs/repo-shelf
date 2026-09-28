@@ -273,7 +273,9 @@ public sealed class DiscoveryRunTests : IDisposable
         Assert.Equal(5, Candidates(second).Count);
         Assert.Empty(Candidates(paused));
         Assert.Empty(Candidates(unprofiled));
-        Assert.All(Candidates(first), r => Assert.Equal("zh", r.Lang));
+        // No language sent yet: scheduled/first runs follow the OS UI language, not a hard-coded one.
+        var osLang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh" ? "zh" : "en";
+        Assert.All(Candidates(first), r => Assert.Equal(osLang, r.Lang));
         Assert.DoesNotContain(_github.Requests, r => r.Contains("three") || r.Contains("four"));
     }
 

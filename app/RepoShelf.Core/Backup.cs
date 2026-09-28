@@ -48,7 +48,9 @@ public sealed class BackupService
         return rows;
     }
 
-    private void ImportDiscovery(JsonArray projects, JsonArray candidates, string mode)
+    /// <param name="dryRun">Validate inside a transaction that is rolled back, so a malformed
+    /// discovery section rejects the whole file before any repository is written.</param>
+    private void ImportDiscovery(JsonArray projects, JsonArray candidates, string mode, bool dryRun = false)
     {
         lock (_store.Sync)
         {
@@ -114,7 +116,7 @@ public sealed class BackupService
                     mapped["projectId"] = localId;
                     Write("discovery_candidates", CandidateColumns, mapped, "project_id,github_id");
                 }
-                transaction.Commit();
+                if (!dryRun) transaction.Commit();
             }
             catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
             {
@@ -252,6 +254,8 @@ public sealed class BackupService
         {
             throw new BackupException("invalid_mode", $"Unknown restore mode \"{mode}\"");
         }
+        if (version == 2)
+            ImportDiscovery(root["projects"]!.AsArray(), root["discoveryCandidates"]!.AsArray(), mode, dryRun: true);
 
         var added = 0;
         var skipped = 0;

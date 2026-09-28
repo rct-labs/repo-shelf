@@ -51,7 +51,8 @@ public sealed class ProjectProfiler : IDiscoveryRoutes
             var body = await DiscoveryApi.ReadBodyAsync(ctx);
             if (body["lang"] is JsonValue value && value.TryGetValue<string>(out var text)) lang = text;
         }
-        var project = await GenerateAsync(id, lang ?? "zh", ctx.RequestAborted);
+        if (!string.IsNullOrWhiteSpace(lang)) _host.Store.SetSetting(DiscoveryRunner.LangSetting, lang.Trim());
+        var project = await GenerateAsync(id, lang ?? DiscoveryRunner.ResolveLang(_host.Store), ctx.RequestAborted);
         await DiscoveryApi.SendDataAsync(ctx, new JsonObject { ["project"] = project });
         return true;
     }

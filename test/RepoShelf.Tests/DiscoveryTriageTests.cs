@@ -165,7 +165,7 @@ public sealed class DiscoveryTriageTests : IAsyncLifetime
         _host.Repos.UpdateAnnotation(id, new JsonObject
         {
             ["reason"] = "my reason", ["notes"] = "my notes", ["tags"] = new JsonArray("manual"),
-            ["projects"] = new JsonArray("Existing"),
+            ["projects"] = new JsonArray("Existing"), ["status"] = "adopted",
         });
         _github.Requests.Clear();
         var repo = await Accept(project);
@@ -174,6 +174,8 @@ public sealed class DiscoveryTriageTests : IAsyncLifetime
         Assert.Equal("my reason", repo["annotation"]!["reason"]!.GetValue<string>());
         Assert.Equal("my notes", repo["annotation"]!["notes"]!.GetValue<string>());
         Assert.Equal("manual", repo["annotation"]!["tags"]![0]!.GetValue<string>());
+        // The owner already judged this repository; accepting must not reset it.
+        Assert.Equal("adopted", repo["annotation"]!["status"]!.GetValue<string>());
         Assert.Equal(new[] { "Existing", "Example" }, repo["annotation"]!["projects"]!.AsArray().Select(p => p!.GetValue<string>()));
         Assert.Empty(_github.Requests);
     }

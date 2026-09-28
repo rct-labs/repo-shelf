@@ -327,6 +327,11 @@ export function mount(root, ctx) {
     if (document.querySelector('dialog[open]')) return;
     const items = sortedVisible();
     const current = items[state.selected];
+    if (state.menuFor && isTyping(e.target) && e.key !== 'Escape') {
+      // Focus moved to an input (e.g. the omnibox): typing must not dismiss anything.
+      closeDismissMenu();
+      return;
+    }
     if (state.menuFor) {
       const menuCandidate = items.find((c) => key(c) === state.menuFor);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDismissMenu(); return; }

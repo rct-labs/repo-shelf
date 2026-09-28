@@ -88,7 +88,11 @@ public sealed class DiscoveryTriage : IDiscoveryRoutes
                 throw new ServiceException("invalid_field", 400, "Candidate URL no longer identifies the recommended repository");
             var labels = ProjectLabels(repo, candidate);
             using var tx = _store.Conn.BeginTransaction();
-            _repos.UpdateAnnotation(repoId, new JsonObject { ["projects"] = labels, ["status"] = "to_investigate" });
+            // Only a fresh (Inbox) record moves to To investigate; a status the owner
+            // already chose for a repository saved earlier is personal and kept.
+            var patch = new JsonObject { ["projects"] = labels };
+            if (repo["annotation"]?["status"]?.GetValue<string>() is null or "inbox") patch["status"] = "to_investigate";
+            _repos.UpdateAnnotation(repoId, patch);
             SetState(projectId, githubId, "accepted");
             tx.Commit();
             return _repos.GetRepo(repoId)!;

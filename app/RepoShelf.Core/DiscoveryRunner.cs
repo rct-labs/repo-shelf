@@ -20,7 +20,13 @@ public sealed class DiscoveryRunner : IDiscoveryRoutes, IDisposable
     // After a failed, cancelled or rate-limited run the hourly tick must not retry every hour (quota).
     public static readonly TimeSpan RetryInterval = TimeSpan.FromHours(24);
     public static readonly TimeSpan TickInterval = TimeSpan.FromHours(1);
-    private const string LangSetting = "discovery_lang";
+    public const string LangSetting = "discovery_lang";
+
+    /// <summary>The owner's language for AI text: last language the UI sent (manual
+    /// run or profile), else the OS UI language — never a hard-coded default.</summary>
+    public static string ResolveLang(Store store) =>
+        store.GetSetting(LangSetting) is { Length: > 0 } saved ? saved
+        : CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh" ? "zh" : "en";
     private static readonly string[] States = { "pending", "later", "accepted", "dismissed" };
 
     private readonly Store _store;
@@ -96,7 +102,7 @@ public sealed class DiscoveryRunner : IDiscoveryRoutes, IDisposable
 
             // Scheduled runs reuse the language of the last manual run.
             if (!string.IsNullOrWhiteSpace(lang)) _store.SetSetting(LangSetting, lang.Trim());
-            var reasonLang = string.IsNullOrWhiteSpace(lang) ? _store.GetSetting(LangSetting) ?? "zh" : lang.Trim();
+            var reasonLang = string.IsNullOrWhiteSpace(lang) ? ResolveLang(_store) : lang.Trim();
 
             var id = Guid.NewGuid().ToString();
             var progress = new JsonObject
