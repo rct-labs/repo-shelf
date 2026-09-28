@@ -20,6 +20,23 @@ public sealed class ServiceHost : IDisposable
     public AiService Ai { get; }
 
     private Microsoft.AspNetCore.Builder.WebApplication? _app;
+    private readonly object _featureSync = new();
+    private readonly Dictionary<Type, object> _features = new();
+    private bool _disposed;
+
+    /// <summary>Creates one feature of each type per host, including under concurrent requests.</summary>
+    public T Feature<T>(Func<ServiceHost, T> create) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        lock (_featureSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_features.TryGetValue(typeof(T), out var feature)) return (T)feature;
+            var value = create(this) ?? throw new InvalidOperationException("Feature factory returned null");
+            _features.Add(typeof(T), value);
+            return value;
+        }
+    }
 
     private ServiceHost(AppConfig config, Store store, string pairingToken)
     {
@@ -55,6 +72,8 @@ public sealed class ServiceHost : IDisposable
     /// <summary>Throws InvalidOperationException with Code EADDRINUSE when the port is taken.</summary>
     public async Task StartAsync(CancellationToken cancel = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_app is not null) throw new InvalidOperationException("Service is already started");
         var api = new HttpApi(this);
         _app = api.Build();
         try
@@ -66,6 +85,7 @@ public sealed class ServiceHost : IDisposable
         {
             throw new InvalidOperationException($"Port {Config.Port} is already in use.", ex) { Data = { ["Code"] = "EADDRINUSE" } };
         }
+        DiscoveryRoutes.Start(this);
     }
 
     public async Task StopAsync()
@@ -81,6 +101,20 @@ public sealed class ServiceHost : IDisposable
     public void Dispose()
     {
         StopAsync().GetAwaiter().GetResult();
+        object[] features;
+        lock (_featureSync)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            features = _features.Values.Reverse().ToArray();
+            _features.Clear();
+        }
+        // Stop timers/runners before their database is closed.
+        foreach (var feature in features)
+        {
+            if (feature is IAsyncDisposable asyncDisposable) asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            else if (feature is IDisposable disposable) disposable.Dispose();
+        }
         Store.Dispose();
     }
 }

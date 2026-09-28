@@ -228,6 +228,12 @@ public sealed class HttpApi
         var repos = _host.Repos;
         var jobs = _host.Jobs;
 
+        if (DiscoveryApi.HandlesPath(path)
+            && await _host.Feature(h => new DiscoveryApi(h)).TryHandleAsync(ctx, method, path))
+        {
+            return;
+        }
+
         if (method == "GET" && path == "/api/health")
         {
             await SendJson(ctx, 200, new JsonObject { ["ok"] = true, ["data"] = new JsonObject { ["app"] = "repo-shelf", ["version"] = AppVersion } });
@@ -464,6 +470,7 @@ public sealed class HttpApi
                     ["pairingToken"] = _host.PairingToken,
                     ["githubTokenSet"] = store.GetSetting("github_token") is not null,
                     ["deepseekKeySet"] = store.GetSetting("deepseek_api_key") is not null,
+                    ["features"] = new JsonObject { ["discover"] = true },
                     ["statuses"] = new JsonArray(Store.Statuses.Select(s => JsonValue.Create(s)).ToArray()),
                 },
             });

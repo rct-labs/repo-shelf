@@ -94,6 +94,59 @@ public sealed class Store : IDisposable
           created_at TEXT NOT NULL,
           PRIMARY KEY (repo_id, kind)
         );
+
+        -- Discovery is separate from the library and its search index.
+        CREATE TABLE IF NOT EXISTS projects (
+          id INTEGER PRIMARY KEY,
+          name TEXT UNIQUE NOT NULL,
+          path TEXT NOT NULL,
+          paused INTEGER NOT NULL DEFAULT 0,
+          needs TEXT NOT NULL DEFAULT '[]',
+          queries TEXT NOT NULL DEFAULT '[]',
+          languages TEXT NOT NULL DEFAULT '[]',
+          dependencies TEXT NOT NULL DEFAULT '[]',
+          profile_files TEXT NOT NULL DEFAULT '[]',
+          profiled_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS discovery_candidates (
+          project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          github_id INTEGER NOT NULL,
+          full_name TEXT,
+          html_url TEXT,
+          description TEXT,
+          language TEXT,
+          license_id TEXT,
+          stars INTEGER,
+          stars_per_month REAL,
+          pushed_at TEXT,
+          created_at_upstream TEXT,
+          score INTEGER,
+          matched_need TEXT,
+          cost TEXT,
+          reason TEXT,
+          reason_lang TEXT,
+          model TEXT,
+          state TEXT NOT NULL DEFAULT 'pending',
+          dismiss_reason TEXT,
+          run_id TEXT,
+          proposed_at TEXT NOT NULL,
+          decided_at TEXT,
+          PRIMARY KEY (project_id, github_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS discovery_runs (
+          id TEXT PRIMARY KEY,
+          status TEXT,
+          trigger TEXT,
+          started_at TEXT,
+          finished_at TEXT,
+          progress TEXT,
+          error TEXT,
+          new_candidates INTEGER DEFAULT 0
+        );
         """;
 
     private readonly SqliteConnection _conn;
