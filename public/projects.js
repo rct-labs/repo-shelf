@@ -33,6 +33,7 @@ extendStrings('en', {
   projectGenerating: 'Generating…',
   projectGenerated: 'Profile generated',
   privacyTitle: 'Send project files to DeepSeek?',
+  privacySend: 'Send and generate',
   privacyNote: 'Only these files from the project root are read, each truncated: {files}. TASK_QUEUE.md: only rows that are not DONE; manifests: dependency names only. Never read: {never}, databases or source files.',
   privacyLastRead: 'Last profile read exactly: {files}.',
   privacyFilesRead: 'Files read',
@@ -73,6 +74,7 @@ extendStrings('zh-CN', {
   projectGenerating: '生成中…',
   projectGenerated: '画像已生成',
   privacyTitle: '把项目文件发送给 DeepSeek？',
+  privacySend: '发送并生成',
   privacyNote: '只读取项目根目录下的这些文件，每个都会截断：{files}。TASK_QUEUE.md 只取未 DONE 的行；清单文件只取依赖名称。绝不读取：{never}、数据库或源代码。',
   privacyLastRead: '上次画像实际读取：{files}。',
   privacyFilesRead: '已读取的文件',
@@ -186,6 +188,8 @@ export function mount(root, ctx) {
     const ok = await ctx.confirmDialog({
       title: t('privacyTitle'),
       message: t('privacyNote', { files: WHITELIST.join(', '), never: NEVER_READ.join(', ') }) + files,
+      confirmLabel: t('privacySend'),
+      danger: false,
     });
     if (!ok) return;
     state.generating.add(project.id);

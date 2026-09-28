@@ -165,20 +165,25 @@ function toast(message, action) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), action ? 6000 : 2600);
 }
 
-function confirmDialog({ title, message }) {
+// confirmLabel/danger default to the destructive "Delete" button; pass them for
+// non-destructive confirmations (e.g. sending project files to DeepSeek).
+function confirmDialog({ title, message, confirmLabel = t('confirm'), danger = true }) {
   return new Promise((resolve) => {
     const dialog = $('#modal-confirm');
     $('#confirm-title').textContent = title;
     $('#confirm-message').textContent = message;
     const btn = $('#btn-confirm');
+    btn.textContent = confirmLabel;
+    btn.classList.toggle('btn-danger', danger);
+    btn.classList.toggle('btn-primary', !danger);
     const cleanup = () => {
       btn.removeEventListener('click', onClick);
       dialog.removeEventListener('close', onClose);
     };
-    const onClick = () => { cleanup(); resolve(true); };
+    const onClick = () => { cleanup(); dialog.close(); resolve(true); };
     const onClose = () => { cleanup(); resolve(false); };
-    btn.addEventListener('click', () => { dialog.close(); onClick(); });
-    dialog.addEventListener('close', onClose, { once: true });
+    btn.addEventListener('click', onClick);
+    dialog.addEventListener('close', onClose);
     dialog.showModal();
   });
 }
