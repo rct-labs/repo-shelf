@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|---|
 | 1 | DISC-1 | Discovery data + projects API — tables, DiscoveryStore, projects CRUD, features flag, route registry + host feature bag (spec Data/HTTP/Extension points) | `DONE` | 133 passed | 104 passed (.NET local) | codex |
 | 2 | DISC-2 | Project profile — whitelist reader, DeepSeek ChatJsonAsync, POST /api/projects/{id}/profile (spec Profile; acc. 11) | `DONE` | 104 passed (.NET local) | 42 passed (gate filter) | claude |
-| 3 | DISC-3 | Recall — GitHub search client, budgeted recall, exclusion, stars-per-month shortlist, rate-limit stop (spec Recall; acc. 12) | `IN_PROGRESS` | 118 passed (.NET local) | | codex |
+| 3 | DISC-3 | Recall — GitHub search client, budgeted recall, exclusion, stars-per-month shortlist, rate-limit stop (spec Recall; acc. 12) | `DONE` | 118 passed (.NET local) | 134 passed (.NET local) | codex |
 | 4 | DISC-4 | Scoring + runner — DeepSeek scorer, background run, weekly scheduler, run/candidates API, NewCandidates event (spec Scoring/Runner; acc. 13) | `TODO` | | | claude |
 | 5 | DISC-5 | Triage — accept/later/dismiss endpoints, accept via save path, per-repo recommendations endpoint (spec HTTP; acc. 14) | `TODO` | | | codex |
 | 6 | DISC-6 | Backup v2 — export/restore projects and candidates, v1 compatibility (spec Backup; acc. 15) | `TODO` | | | codex |

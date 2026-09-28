@@ -15,7 +15,8 @@ public static class TestRepos
     public static JsonObject MakeRepo(
         long id, string owner = "octocat", string name = "repo", string description = "A sample repository",
         string[]? topics = null, string? language = "JavaScript", string? license = "MIT",
-        bool archived = false, string pushedAt = "2026-09-01T00:00:00Z", long stars = 42, string defaultBranch = "main")
+        bool archived = false, string pushedAt = "2026-09-01T00:00:00Z", long stars = 42, string defaultBranch = "main",
+        string createdAt = "2026-01-01T00:00:00Z", bool fork = false)
     {
         return new JsonObject
         {
@@ -29,6 +30,8 @@ public static class TestRepos
             ["language"] = language is null ? null : JsonValue.Create(language),
             ["license"] = license is null ? null : new JsonObject { ["spdx_id"] = license },
             ["archived"] = archived,
+            ["fork"] = fork,
+            ["created_at"] = createdAt,
             ["pushed_at"] = pushedAt,
             ["stargazers_count"] = stars,
             ["default_branch"] = defaultBranch,
@@ -43,6 +46,7 @@ public sealed class FakeGitHubServer : IDisposable
     private readonly Dictionary<string, JsonObject> _repos = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _readmes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<JsonObject>> _starred = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<JsonObject>> _search = new(StringComparer.Ordinal);
     private readonly List<(Func<string, bool> Match, Func<HttpResponseMessage> Respond)> _failures = new();
     private readonly List<Func<string, bool>> _throwOnce = new();
 
@@ -101,6 +105,8 @@ public sealed class FakeGitHubServer : IDisposable
 
     public void SetStarred(string username, List<JsonObject> repos) => _starred[username] = repos;
 
+    public void SetSearch(string query, IEnumerable<JsonObject> repos) => _search[query] = repos.ToList();
+
     /// <summary>Fail the next matching request N times with the given status.</summary>
     public void FailNext(Func<string, bool> match, int times, HttpStatusCode status, Dictionary<string, string>? headers = null)
     {
@@ -141,6 +147,19 @@ public sealed class FakeGitHubServer : IDisposable
         }
 
         var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts is ["search", "repositories"])
+        {
+            var query = ctx.Request.Query["q"].ToString();
+            var list = _search.GetValueOrDefault(query) ?? new List<JsonObject>();
+            var perPage = int.TryParse(ctx.Request.Query["per_page"], out var pp) ? pp : 30;
+            await ctx.Response.WriteAsJsonAsync(new JsonObject
+            {
+                ["total_count"] = list.Count,
+                ["incomplete_results"] = false,
+                ["items"] = new JsonArray(list.Take(perPage).Select(x => x.DeepClone()).ToArray()),
+            });
+            return;
+        }
         if (parts is ["repos", var owner, var repo, "readme"])
         {
             if (_readmes.TryGetValue(Key(owner, repo), out var text))

@@ -34,6 +34,9 @@ public sealed record RepoMeta(
     long? Stars,
     string? DefaultBranch)
 {
+    public string? CreatedAt { get; init; }
+    public bool Fork { get; init; }
+
     public static RepoMeta FromJson(JsonElement j)
     {
         var license = j.TryGetProperty("license", out var lic) && lic.ValueKind == JsonValueKind.Object
@@ -57,7 +60,11 @@ public sealed record RepoMeta(
             Archived: j.TryGetProperty("archived", out var a) && a.GetBoolean(),
             PushedAt: j.TryGetProperty("pushed_at", out var pa) ? pa.GetString() : null,
             Stars: stars,
-            DefaultBranch: j.TryGetProperty("default_branch", out var db) ? db.GetString() : null);
+            DefaultBranch: j.TryGetProperty("default_branch", out var db) ? db.GetString() : null)
+        {
+            CreatedAt = j.TryGetProperty("created_at", out var ca) ? ca.GetString() : null,
+            Fork = j.TryGetProperty("fork", out var f) && f.GetBoolean(),
+        };
     }
 }
 
@@ -150,26 +157,30 @@ public sealed class GitHubClient
     }
 
     /// <summary>GET with bounded retries for network errors and 5xx.</summary>
-    private async Task<HttpResponseMessage> SendAsync(string path, string accept = "application/vnd.github+json")
+    private async Task<HttpResponseMessage> SendAsync(string path, string accept = "application/vnd.github+json",
+        CancellationToken cancel = default, int? maxTransientRetries = null)
     {
+        var retries = maxTransientRetries ?? _maxTransientRetries;
         Exception? lastError = null;
-        for (var attempt = 0; attempt <= _maxTransientRetries; attempt++)
+        for (var attempt = 0; attempt <= retries; attempt++)
         {
+            cancel.ThrowIfCancellationRequested();
             HttpResponseMessage res;
             try
             {
-                res = await _http.SendAsync(NewRequest(path, accept));
+                using var request = NewRequest(path, accept);
+                res = await _http.SendAsync(request, cancel);
             }
             catch (HttpRequestException ex)
             {
                 lastError = ex;
-                await Task.Delay(400 * (1 << attempt));
+                if (attempt < retries) await Task.Delay(400 * (1 << attempt), cancel);
                 continue;
             }
-            catch (TaskCanceledException ex)
+            catch (TaskCanceledException ex) when (!cancel.IsCancellationRequested)
             {
                 lastError = ex;
-                await Task.Delay(400 * (1 << attempt));
+                if (attempt < retries) await Task.Delay(400 * (1 << attempt), cancel);
                 continue;
             }
             if ((int)res.StatusCode >= 500)
@@ -180,13 +191,13 @@ public sealed class GitHubClient
                     Retryable = true,
                 };
                 res.Dispose();
-                await Task.Delay(400 * (1 << attempt));
+                if (attempt < retries) await Task.Delay(400 * (1 << attempt), cancel);
                 continue;
             }
             return res;
         }
         throw new GitHubException("upstream_unavailable",
-            $"GitHub is unreachable after {_maxTransientRetries + 1} attempts: {lastError?.Message ?? "network error"}")
+            $"GitHub is unreachable after {retries + 1} attempts: {lastError?.Message ?? "network error"}")
         { Retryable = true };
     }
 
@@ -204,6 +215,19 @@ public sealed class GitHubClient
         return RepoMeta.FromJson(json);
     }
 
+    /// <summary>One search request, without pagination or retries that could exceed the discovery budget.</summary>
+    public async Task<List<RepoMeta>> SearchReposAsync(string query, int perPage, CancellationToken cancel = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(perPage, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(perPage, 100);
+        using var res = await SendAsync(
+            $"/search/repositories?q={Uri.EscapeDataString(query)}&sort=stars&order=desc&per_page={perPage}",
+            cancel: cancel, maxTransientRetries: 0);
+        RaiseForStatus(res, "repository search");
+        using var doc = await JsonDocument.ParseAsync(await res.Content.ReadAsStreamAsync(cancel), cancellationToken: cancel);
+        return doc.RootElement.GetProperty("items").EnumerateArray().Take(perPage).Select(RepoMeta.FromJson).ToList();
+    }
+
     // GET /repositories/{id} resolves the current location of a repo id,
     // which lets refresh follow renames and ownership transfers.
     public async Task<RepoMeta> FetchRepoByIdAsync(long githubId)
@@ -213,16 +237,17 @@ public sealed class GitHubClient
     }
 
     /// <summary>Returns null when the repo has no README.</summary>
-    public async Task<(string Text, bool Truncated)?> FetchReadmeAsync(string owner, string repo)
+    public async Task<(string Text, bool Truncated)?> FetchReadmeAsync(string owner, string repo,
+        CancellationToken cancel = default, bool retryTransient = true)
     {
         using var res = await SendAsync($"/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}/readme",
-            accept: "application/vnd.github.raw+json");
+            accept: "application/vnd.github.raw+json", cancel: cancel, maxTransientRetries: retryTransient ? null : 0);
         if (res.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
         RaiseForStatus(res, $"README of {owner}/{repo}");
-        var text = await res.Content.ReadAsStringAsync();
+        var text = await res.Content.ReadAsStringAsync(cancel);
         var truncated = false;
         if (text.Length > MaxReadmeChars)
         {
