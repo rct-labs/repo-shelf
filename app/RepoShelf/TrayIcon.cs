@@ -4,7 +4,7 @@ using Application = System.Windows.Application;
 
 namespace RepoShelf;
 
-/// <summary>WinForms NotifyIcon wrapper: tray menu with open/autostart/quit.</summary>
+/// <summary>WinForms NotifyIcon wrapper: tray menu with open/autostart/quit, new-recommendation balloon.</summary>
 public sealed class TrayIcon : IDisposable
 {
     private readonly NotifyIcon _icon;
@@ -44,6 +44,18 @@ public sealed class TrayIcon : IDisposable
             ContextMenuStrip = menu,
         };
         _icon.DoubleClick += (_, _) => onOpen();
+        _icon.BalloonTipClicked += (_, _) => onOpen();
+    }
+
+    /// <summary>One balloon per discovery run that inserted candidates; clicking it opens the window.</summary>
+    public void ShowNewCandidates(int count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+        var text = count == 1 ? "1 new recommendation" : $"{count} new recommendations";
+        _icon.ShowBalloonTip(10_000, "Repo Shelf", text, ToolTipIcon.Info);
     }
 
     public void Dispose() => _icon.Dispose();

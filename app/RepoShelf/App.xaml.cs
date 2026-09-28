@@ -102,6 +102,12 @@ public partial class App : Application
             }
 
             _tray = new TrayIcon(ShowMainWindow, ShellIntegration.IsAutostartEnabled, ShellIntegration.SetAutostart, Quit);
+            // Only the process that owns the service runs discovery; the event fires off the UI thread.
+            if (_ownsService)
+            {
+                _service.Feature(h => new DiscoveryRunner(h)).NewCandidates +=
+                    count => Dispatcher.BeginInvoke(() => _tray?.ShowNewCandidates(count));
+            }
             // Ctrl+Alt+K summons the compact window from anywhere.
             _hotKeys = new HotKeys(() => Dispatcher.Invoke(ShowMainWindow));
             if (!_hotKeys.Registered)

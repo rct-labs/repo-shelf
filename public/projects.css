@@ -1,0 +1,43 @@
+/* Projects tab (projects.js). Reuses .field / .btn / .hint / .badge from styles.css. */
+#projects-pane { padding: 0 0 24px; }
+.projects { padding: 10px 14px; }
+.projects-title { margin: 0; font-size: 15px; }
+.project-add-wrap { margin: 10px 0 14px; }
+.project-add { display: flex; gap: 8px; align-items: flex-end; }
+.project-add .field { flex: 1; margin-bottom: 0; }
+.project-add .field:first-child { flex: 0 0 180px; }
+
+.project-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.project-card.paused { opacity: .7; }
+.project-head { display: flex; align-items: center; gap: 8px; }
+.project-name { font-weight: 650; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.project-paused { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-dim); cursor: pointer; }
+.project-path { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); overflow-wrap: anywhere; }
+.project-privacy {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  line-height: 1.6;
+}
+.project-label { font-weight: 600; }
+.project-file {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin: 0 4px 2px 0;
+}
+.project-card .field textarea { font-size: 13px; min-height: 60px; }
+.project-card .field > span .badge { margin-right: 2px; }
+.project-facts { margin-bottom: 6px; }
+.project-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
