@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     private static readonly (double W, double H) BarSize = (640, 96);
     private static readonly (double W, double H) CompactSize = (640, 500);
     private static readonly (double W, double H) ExpandedSize = (1120, 720);
+    private static readonly (double W, double H) FeedSize = (900, 640);
 
     /// <summary>When false, closing the window hides it to the tray instead.</summary>
     public bool AllowClose { get; set; }
@@ -56,6 +57,7 @@ public partial class MainWindow : Window
                 {
                     "bar" => BarSize,
                     "expanded" => ExpandedSize,
+                    "feed" => FeedSize,
                     _ => CompactSize,
                 });
                 _expanded = mode == "expanded";

@@ -153,6 +153,48 @@ const en = {
   field_reason: 'reason',
   field_notes: 'notes',
   field_readme: 'README',
+
+  tabFeed: 'Recommendations',
+  tabLibrary: 'Library',
+  tabProjects: 'Projects',
+  feedAll: 'All',
+  feedLaterToggle: 'Later list',
+  feedPendingToggle: 'Pending',
+  feedKeysHint: 'j/k move · a accept · s later · d dismiss',
+  feedEmpty: 'No pending recommendations. Run now or wait for the weekly run.',
+  feedEmptyLater: 'Nothing saved for later.',
+  feedNoProjects: 'No projects yet. Add one in the Projects tab and generate its profile.',
+  feedRunNow: 'Run now',
+  feedRunCancel: 'Cancel run',
+  feedNeverRun: 'No discovery run yet.',
+  feedLastRun: 'Last run {time} · {status}',
+  feedRunning: 'Running · projects {done}/{total} · scored {scored} · new {inserted}',
+  feedRunStarted: 'Discovery run started.',
+  feedRateLimited: 'GitHub rate limit reached; resets {time}.',
+  runStatus_running: 'running',
+  runStatus_done: 'done',
+  runStatus_failed: 'failed',
+  runStatus_cancelled: 'cancelled',
+  noActiveProjects: 'Add a project, generate its profile and keep it active first.',
+  runInProgress: 'A discovery run is already in progress.',
+  accept: 'Accept',
+  later: 'Later',
+  dismiss: 'Dismiss',
+  matchedNeed: 'Need',
+  growthPerMonth: '+{n}/mo',
+  score: 'Score {n}',
+  cost_low: 'Low cost',
+  cost_medium: 'Medium cost',
+  cost_high: 'High cost',
+  dismissReasonTitle: 'Why dismiss? (Enter = not relevant)',
+  dismiss_not_relevant: 'Not relevant',
+  dismiss_too_heavy: 'Too heavy',
+  dismiss_already_have: 'Already have one',
+  dismiss_low_quality: 'Low quality',
+  toastAccepted: 'Saved to your library as To investigate.',
+  toastLater: 'Moved to later.',
+  toastDismissed: 'Dismissed.',
+  recommendedFor: 'Recommended for {project}',
 };
 
 const zhCN = {
@@ -301,6 +343,48 @@ const zhCN = {
   field_reason: '收藏理由',
   field_notes: '笔记',
   field_readme: 'README',
+
+  tabFeed: '推荐',
+  tabLibrary: '收藏库',
+  tabProjects: '项目',
+  feedAll: '全部',
+  feedLaterToggle: '稍后列表',
+  feedPendingToggle: '待处理',
+  feedKeysHint: 'j/k 移动 · a 采纳 · s 稍后 · d 忽略',
+  feedEmpty: '暂无待处理的推荐。可以立即运行，或等待每周自动运行。',
+  feedEmptyLater: '稍后列表为空。',
+  feedNoProjects: '还没有项目。请在“项目”标签页添加项目并生成画像。',
+  feedRunNow: '立即运行',
+  feedRunCancel: '取消运行',
+  feedNeverRun: '尚未运行过发现任务。',
+  feedLastRun: '上次运行 {time} · {status}',
+  feedRunning: '运行中 · 项目 {done}/{total} · 已评分 {scored} · 新增 {inserted}',
+  feedRunStarted: '发现任务已开始。',
+  feedRateLimited: 'GitHub 速率限制已触发，将于 {time} 重置。',
+  runStatus_running: '运行中',
+  runStatus_done: '已完成',
+  runStatus_failed: '失败',
+  runStatus_cancelled: '已取消',
+  noActiveProjects: '请先添加项目、生成画像，并保持项目为启用状态。',
+  runInProgress: '已有发现任务在运行。',
+  accept: '采纳',
+  later: '稍后',
+  dismiss: '忽略',
+  matchedNeed: '需求',
+  growthPerMonth: '+{n}/月',
+  score: '评分 {n}',
+  cost_low: '接入成本低',
+  cost_medium: '接入成本中',
+  cost_high: '接入成本高',
+  dismissReasonTitle: '忽略原因？（Enter = 不相关）',
+  dismiss_not_relevant: '不相关',
+  dismiss_too_heavy: '太重',
+  dismiss_already_have: '已有同类',
+  dismiss_low_quality: '质量差',
+  toastAccepted: '已存入收藏库，状态为“待调研”。',
+  toastLater: '已移到稍后列表。',
+  toastDismissed: '已忽略。',
+  recommendedFor: '推荐给 {project}',
 };
 
 const DICTS = { en, 'zh-CN': zhCN };
@@ -324,6 +408,11 @@ export function setLanguage(lang) {
   current = lang;
   localStorage.setItem(STORAGE_KEY, lang);
   document.documentElement.lang = lang === 'zh-CN' ? 'zh-CN' : 'en';
+}
+
+// Feature modules (e.g. projects.js) register their own strings here.
+export function extendStrings(lang, dict) {
+  if (DICTS[lang]) Object.assign(DICTS[lang], dict);
 }
 
 export function t(key, params = {}) {

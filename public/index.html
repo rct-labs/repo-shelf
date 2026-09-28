@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="/icon.png">
   <title>Repo Shelf</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/projects.css">
 </head>
 <body>
   <div id="app" class="mode-compact">
@@ -28,6 +29,13 @@
       </button>
       <select id="lang-switch" class="lang-switch" aria-label="Language"></select>
     </div>
+
+    <!-- Tabs: only shown when the backend reports features.discover -->
+    <nav id="tabs" class="tabs hidden" role="tablist">
+      <button type="button" class="tab" role="tab" data-tab="feed" data-i18n="tabFeed"></button>
+      <button type="button" class="tab" role="tab" data-tab="library" data-i18n="tabLibrary"></button>
+      <button type="button" class="tab" role="tab" data-tab="projects" data-i18n="tabProjects"></button>
+    </nav>
 
     <!-- URL save banner -->
     <div id="save-banner" class="save-banner hidden">
@@ -59,6 +67,8 @@
         <div id="detail-content" class="detail-content"></div>
       </section>
     </div>
+    <section id="feed-pane" class="tab-pane hidden"></section>
+    <section id="projects-pane" class="tab-pane hidden"></section>
     <div class="statusbar"><span id="results-count"></span><span class="statusbar-hint" data-i18n="statusbarHint"></span></div>
   </div>
 

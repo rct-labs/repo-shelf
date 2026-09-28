@@ -1,6 +1,8 @@
 import { marked } from '/vendor/marked.esm.js';
 import DOMPurify from '/vendor/purify.es.mjs';
 import { t, getLanguage, setLanguage, detectLanguage, LANGUAGES } from '/i18n.js';
+import { mount as mountFeed } from '/discover.js';
+import { mount as mountProjects } from '/projects.js';
 
 const TOKEN = document.querySelector('meta[name="repo-shelf-token"]')?.content || '';
 
@@ -76,6 +78,8 @@ const state = {
   jobTimer: null,
   libraryEmpty: false,
   detected: null, // { valid, fullName, found, repo }
+  discover: false, // backend reports features.discover (desktop service only)
+  tab: 'library', // feed | library | projects
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -142,12 +146,23 @@ function applyI18n() {
 // ---------------------------------------------------------------------------
 
 let toastTimer = null;
-function toast(message) {
+function toast(message, action) {
   const el = $('#toast');
   el.textContent = message;
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-link btn-sm toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      el.classList.add('hidden');
+      action.onClick();
+    });
+    el.append(' ', btn);
+  }
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), action ? 6000 : 2600);
 }
 
 function confirmDialog({ title, message }) {
@@ -172,13 +187,21 @@ function confirmDialog({ title, message }) {
 // Modes (bar <-> compact <-> expanded)
 // ---------------------------------------------------------------------------
 
+// Host window size: bar strip, feed size for the Recommendations/Projects
+// tabs, otherwise the Library's compact/expanded size.
+function syncWindowSize() {
+  const app = $('#app');
+  const mode = ['bar', 'compact', 'expanded'].find((m) => app.classList.contains(`mode-${m}`));
+  hostNotify({ type: 'resize', mode: mode !== 'bar' && state.tab !== 'library' ? 'feed' : mode });
+}
+
 function setMode(mode) {
   const app = $('#app');
   if (app.classList.contains(`mode-${mode}`)) return;
   app.classList.remove('mode-bar', 'mode-compact', 'mode-expanded');
   app.classList.add(`mode-${mode}`);
   $('#detail-pane').classList.toggle('hidden', mode !== 'expanded');
-  hostNotify({ type: 'resize', mode });
+  syncWindowSize();
   if (mode !== 'expanded') {
     state.selectedId = null;
     state.selectedRepo = null;
@@ -188,6 +211,57 @@ function setMode(mode) {
 
 function expandApp() { setMode('expanded'); }
 function collapseApp() { setMode('compact'); }
+
+// ---------------------------------------------------------------------------
+// Tabs (Recommendations / Library / Projects; discovery tabs desktop-only)
+// ---------------------------------------------------------------------------
+
+let feed = null;
+let projects = null;
+
+function switchTab(tab) {
+  if (!state.discover) tab = 'library';
+  const previous = state.tab;
+  state.tab = tab;
+  const app = $('#app');
+  app.dataset.tab = tab;
+  document.querySelectorAll('#tabs .tab').forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  $('#feed-pane').classList.toggle('hidden', tab !== 'feed');
+  $('#projects-pane').classList.toggle('hidden', tab !== 'projects');
+  if (tab !== 'library' && app.classList.contains('mode-expanded')) setMode('compact');
+  if (previous === 'feed' && tab !== 'feed') feed?.hide();
+  if (previous === 'projects' && tab !== 'projects') projects?.hide();
+  if (tab === 'feed') feed?.show();
+  if (tab === 'projects') projects?.show();
+  syncWindowSize();
+}
+
+function openRepoInLibrary(id) {
+  switchTab('library');
+  if ($('#app').classList.contains('mode-bar')) setMode('compact');
+  selectRepo(id);
+}
+
+function initDiscovery() {
+  const ctx = {
+    api,
+    toast,
+    confirmDialog,
+    fmtTime,
+    openRepo: openRepoInLibrary,
+    onLibraryChanged: () => loadFilters().then(() => runSearch()),
+  };
+  feed = mountFeed($('#feed-pane'), ctx);
+  projects = mountProjects($('#projects-pane'), ctx);
+  $('#tabs').classList.remove('hidden');
+  document.querySelectorAll('#tabs .tab').forEach((b) => {
+    b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Search + results
@@ -286,6 +360,8 @@ function onOmniboxInput() {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(async () => {
     const text = $('#omnibox').value.trim();
+    // Typing searches the library, whichever tab was showing.
+    if (state.tab !== 'library') switchTab('library');
     // Any typing or focus leaves bar mode and shows the list.
     const app = $('#app');
     if (app.classList.contains('mode-bar')) setMode('compact');
@@ -408,6 +484,7 @@ function renderChips() {
 function bindFilters() {
   $('#btn-filter').addEventListener('click', (e) => {
     e.stopPropagation();
+    if (state.tab !== 'library') switchTab('library');
     $('#filter-popover').classList.toggle('hidden');
   });
   document.addEventListener('click', (e) => {
@@ -624,6 +701,13 @@ function renderDetail(repo) {
   }
   pane.append(aiBox);
 
+  if (state.discover) {
+    const recBox = document.createElement('div');
+    recBox.className = 'ai-summary recommendations hidden';
+    pane.append(recBox);
+    loadRecommendations(repo.id, recBox);
+  }
+
   // README
   const readmeSection = document.createElement('div');
   readmeSection.className = 'readme-render';
@@ -647,6 +731,39 @@ function renderDetail(repo) {
     readmeSection.append(note);
   }
   pane.append(readmeSection);
+}
+
+// "Recommended for <project>": discovery rationale, AI-generated and kept
+// apart from the owner's reason and notes.
+async function loadRecommendations(id, box) {
+  let recs;
+  try {
+    ({ recommendations: recs } = await api(`/api/repos/${id}/recommendations`));
+  } catch {
+    return;
+  }
+  if (state.selectedRepo?.id !== id || !recs?.length) return;
+  for (const rec of recs) {
+    const head = document.createElement('h3');
+    head.append(badgeEl('AI', 'ai'), document.createTextNode(' ' + t('recommendedFor', { project: rec.projectName || '' })));
+    box.append(head);
+    if (rec.matchedNeed) {
+      const need = document.createElement('p');
+      need.className = 'ai-body';
+      need.textContent = `${t('matchedNeed')}: ${rec.matchedNeed}`;
+      box.append(need);
+    }
+    const reason = document.createElement('p');
+    reason.className = 'ai-body';
+    reason.textContent = rec.reason || '';
+    box.append(reason);
+    const meta = document.createElement('p');
+    meta.className = 'hint';
+    meta.textContent = [rec.score != null ? t('score', { n: rec.score }) : null,
+      rec.cost ? t(`cost_${rec.cost}`) : null, rec.model, fmtTime(rec.proposedAt)].filter(Boolean).join(' · ');
+    box.append(meta);
+  }
+  box.classList.remove('hidden');
 }
 
 async function generateSummary(id, btn) {
@@ -948,6 +1065,8 @@ function init() {
     renderChips();
     renderResults();
     if (state.selectedRepo) renderDetail(state.selectedRepo);
+    feed?.rerender();
+    projects?.rerender();
   });
   $('#omnibox').addEventListener('input', onOmniboxInput);
   $('#omnibox').addEventListener('keydown', (e) => {
@@ -992,7 +1111,14 @@ function init() {
   bindImportModal();
   bindSettingsModal();
   loadFilters().then(() => runSearch());
-  $('#omnibox').focus();
+  api('/api/settings')
+    .then((data) => { state.discover = data?.features?.discover === true; })
+    .catch(() => { state.discover = false; })
+    .then(() => {
+      if (state.discover) initDiscovery();
+      switchTab(state.discover ? 'feed' : 'library');
+      if (state.tab === 'library') $('#omnibox').focus();
+    });
 }
 
 init();

@@ -14,7 +14,7 @@
 | 4 | DISC-4 | Scoring + runner — DeepSeek scorer, background run, weekly scheduler, run/candidates API, NewCandidates event (spec Scoring/Runner; acc. 13) | `DONE` | 134 passed (.NET local) | 146 passed (.NET local) | claude |
 | 5 | DISC-5 | Triage — accept/later/dismiss endpoints, accept via save path, per-repo recommendations endpoint (spec HTTP; acc. 14) | `DONE` | 146 passed (.NET local) | 174 passed (.NET local) | codex |
 | 6 | DISC-6 | Backup v2 — export/restore projects and candidates, v1 compatibility (spec Backup; acc. 15) | `DONE` | 174 passed (.NET prior task) | 10 passed (gate Backup filter) | codex |
-| 7 | DISC-7 | Feed UI — tabs, recommendations feed, keyboard triage, feed window size, projects.js stub + extendStrings (spec UI/Extension points; acc. 16b) | `IN_PROGRESS` | 174 passed (.NET prior task) | | claude |
+| 7 | DISC-7 | Feed UI — tabs, recommendations feed, keyboard triage, feed window size, projects.js stub + extendStrings (spec UI/Extension points; acc. 16b) | `DONE` | 174 passed (.NET prior task) | 238 passed (gate DISC-7) | claude |
 | 8 | DISC-8 | Projects UI + tray — projects tab, profile privacy note, editable needs, tray notification (spec UI) | `TODO` | | | claude |
 | 9 | DISC-9 | Delivery — discover e2e with fake GitHub/DeepSeek on desktop service, README/ARCHITECTURE/ACCEPTANCE (acc. 16a) | `TODO` | | | claude |
 
