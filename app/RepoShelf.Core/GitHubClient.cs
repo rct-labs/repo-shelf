@@ -201,17 +201,17 @@ public sealed class GitHubClient
         { Retryable = true };
     }
 
-    private async Task<JsonElement> GetJsonAsync(string path, string context)
+    private async Task<JsonElement> GetJsonAsync(string path, string context, CancellationToken cancel = default)
     {
-        using var res = await SendAsync(path);
+        using var res = await SendAsync(path, cancel: cancel);
         RaiseForStatus(res, context);
-        using var doc = await JsonDocument.ParseAsync(await res.Content.ReadAsStreamAsync());
+        using var doc = await JsonDocument.ParseAsync(await res.Content.ReadAsStreamAsync(cancel), cancellationToken: cancel);
         return doc.RootElement.Clone();
     }
 
-    public async Task<RepoMeta> FetchRepoAsync(string owner, string repo)
+    public async Task<RepoMeta> FetchRepoAsync(string owner, string repo, CancellationToken cancel = default)
     {
-        var json = await GetJsonAsync($"/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}", $"repository {owner}/{repo}");
+        var json = await GetJsonAsync($"/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}", $"repository {owner}/{repo}", cancel);
         return RepoMeta.FromJson(json);
     }
 
@@ -230,9 +230,9 @@ public sealed class GitHubClient
 
     // GET /repositories/{id} resolves the current location of a repo id,
     // which lets refresh follow renames and ownership transfers.
-    public async Task<RepoMeta> FetchRepoByIdAsync(long githubId)
+    public async Task<RepoMeta> FetchRepoByIdAsync(long githubId, CancellationToken cancel = default)
     {
-        var json = await GetJsonAsync($"/repositories/{githubId}", $"repository id {githubId}");
+        var json = await GetJsonAsync($"/repositories/{githubId}", $"repository id {githubId}", cancel);
         return RepoMeta.FromJson(json);
     }
 

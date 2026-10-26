@@ -93,6 +93,9 @@ const en = {
   importFailures: 'Recent failures',
   refreshAll: 'Refresh all metadata',
   refreshAllStarted: 'Refresh started.',
+  autoRefreshHint: 'While running, checks hourly and refreshes snapshots older than 24 hours (up to 20 repositories per batch). Rate limits pause the next batch.',
+  refreshAllProgress: 'Processed {processed}; refreshed {updated}; failed {failed}.',
+  refreshAllFinished: 'Refresh {status}: refreshed {updated}; failed {failed}.',
 
   settingsTitle: 'Settings',
   settingsVersion: 'Version',
@@ -283,6 +286,9 @@ const zhCN = {
   importFailures: '最近的失败',
   refreshAll: '刷新全部元数据',
   refreshAllStarted: '刷新已开始。',
+  autoRefreshHint: '应用运行期间每小时检查，自动刷新超过 24 小时的数据，每批最多 20 个仓库；遇到限流会延后重试。',
+  refreshAllProgress: '已处理 {processed} 个，已刷新 {updated} 个，失败 {failed} 个。',
+  refreshAllFinished: '刷新任务状态：{status}；已刷新 {updated} 个，失败 {failed} 个。',
 
   settingsTitle: '设置',
   settingsVersion: '版本',

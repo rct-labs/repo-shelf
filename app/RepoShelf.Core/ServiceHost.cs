@@ -86,6 +86,8 @@ public sealed class ServiceHost : IDisposable
             throw new InvalidOperationException($"Port {Config.Port} is already in use.", ex) { Data = { ["Code"] = "EADDRINUSE" } };
         }
         DiscoveryRoutes.Start(this);
+        Feature(h => new AutoRefresh(h.Store, h.Repos,
+            () => h.Jobs.IsBusy)).Start();
     }
 
     public async Task StopAsync()

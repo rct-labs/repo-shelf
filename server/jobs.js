@@ -196,6 +196,7 @@ export function createJobManager({ db, gh, maxRateLimitWaitMs = 90_000, sleepImp
   }
 
   return {
+    isBusy: () => running.size > 0,
     startStarsImport({ username, includeReadme = true } = {}) {
       const id = insertJob('stars', { username, options: { includeReadme } });
       running.set(id, { cancel: false });

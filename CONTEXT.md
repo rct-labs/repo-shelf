@@ -11,7 +11,9 @@
 - Owner chose plan A: home = per-project Recommendations tab; Library tab =
   existing search; Projects tab.
 - Red lines:
-  - GitHub quota: hard per-run budget; no implicit refresh (commit 2fb64bf).
+  - GitHub quota: discovery keeps its hard per-run budget. Owner authorized
+    automatic library refresh on 2026-10-26: hourly checks, snapshots older
+    than 24h, oldest first, up to 20 repositories/batch, persisted rate backoff.
   - Privacy: project files leave the machine only on an explicit per-project
     click, whitelist only (REQUIREMENTS §6).
   - AI output never overwrites reason/notes; candidates never enter library

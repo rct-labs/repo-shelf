@@ -38,6 +38,10 @@ no cloud account, no AI service, no telemetry.
   status (Inbox / To investigate / Tried / Adopted / Dismissed). Personal
   fields are stored separately from source metadata and survive refreshes,
   renames, transfers and upstream unstars.
+- **Automatic refresh**: while the app runs, hourly batches update snapshots
+  older than 24 hours, oldest first (at most 20 repositories per batch).
+  Startup checks after 30 seconds; cooldown survives restarts and GitHub
+  rate limits postpone further requests. Offline snapshots remain available.
 - **Local full-text search** across name, owner, description, topics, README,
   reason and notes, with verified mixed Chinese/English tokenization, field
   weighting and highlighted snippets. Works fully offline.

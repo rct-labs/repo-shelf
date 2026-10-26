@@ -11,6 +11,7 @@ import { openDatabase, getSetting, setSetting } from './db.js';
 import { createGitHubClient } from './github.js';
 import { createJobManager } from './jobs.js';
 import { createApp } from './http.js';
+import { createAutoRefresh } from './auto-refresh.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -32,6 +33,7 @@ export function createService(env = process.env) {
     baseUrl: config.githubApiBase,
   });
   const jobs = createJobManager({ db, gh, maxRateLimitWaitMs: config.maxRateLimitWaitMs });
+  const autoRefresh = createAutoRefresh({ db, gh, busy: () => jobs.isBusy() });
 
   const server = createApp({
     db,
@@ -57,11 +59,13 @@ export function createService(env = process.env) {
         server.once('error', onError);
         server.listen(config.port, config.host, () => {
           server.removeListener('error', onError);
+          autoRefresh.start();
           resolve();
         });
       });
     },
-    close() {
+    async close() {
+      await autoRefresh.stop();
       return new Promise((resolve) => server.close(resolve));
     },
   };

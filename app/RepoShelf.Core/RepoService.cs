@@ -435,7 +435,7 @@ public sealed class RepoService
     }
 
     /// <summary>Refresh source metadata/README from GitHub. Personal fields are untouched.</summary>
-    public async Task<(JsonObject Repo, bool Renamed)> RefreshRepoAsync(long repoId)
+    public async Task<(JsonObject Repo, bool Renamed)> RefreshRepoAsync(long repoId, CancellationToken cancel = default)
     {
         var repo = GetRepo(repoId) ?? throw new ServiceException("not_found", 404, $"No repository with id {repoId}");
         var owner = repo["owner"]!.GetValue<string>();
@@ -445,14 +445,14 @@ public sealed class RepoService
         RepoMeta meta;
         try
         {
-            meta = await _gh.FetchRepoAsync(owner, name);
+            meta = await _gh.FetchRepoAsync(owner, name, cancel);
         }
         catch (GitHubException ex) when (ex.Code == "not_found")
         {
             // Possibly renamed or transferred: resolve the durable id instead.
             try
             {
-                meta = await _gh.FetchRepoByIdAsync(githubId);
+                meta = await _gh.FetchRepoByIdAsync(githubId, cancel);
             }
             catch (GitHubException ex2)
             {
@@ -473,7 +473,7 @@ public sealed class RepoService
         var readmeTruncated = false;
         try
         {
-            var result = await _gh.FetchReadmeAsync(meta.Owner, meta.Name);
+            var result = await _gh.FetchReadmeAsync(meta.Owner, meta.Name, cancel);
             readmeProvided = true;
             if (result is { } r)
             {

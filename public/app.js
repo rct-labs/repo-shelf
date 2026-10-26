@@ -3,6 +3,7 @@ import DOMPurify from '/vendor/purify.es.mjs';
 import { t, getLanguage, setLanguage, detectLanguage, LANGUAGES } from '/i18n.js';
 import { mount as mountFeed } from '/discover.js';
 import { mount as mountProjects } from '/projects.js';
+import { resolveReadmeResources } from '/readme-urls.js';
 
 const TOKEN = document.querySelector('meta[name="repo-shelf-token"]')?.content || '';
 
@@ -559,8 +560,10 @@ function badgeEl(text, kind = '') {
   return span;
 }
 
-function renderMarkdownInto(container, markdown) {
-  container.innerHTML = DOMPurify.sanitize(marked.parse(markdown || '', { async: false }));
+function renderMarkdownInto(container, markdown, repo = null) {
+  const fragment = DOMPurify.sanitize(marked.parse(markdown || '', { async: false }), { RETURN_DOM_FRAGMENT: true });
+  if (repo) resolveReadmeResources(fragment, repo);
+  container.replaceChildren(fragment);
 }
 
 function renderDetail(repo) {
@@ -721,7 +724,7 @@ function renderDetail(repo) {
   readmeSection.append(readmeTitle);
   if (repo.hasReadme && repo.readme) {
     const rendered = document.createElement('div');
-    renderMarkdownInto(rendered, repo.readme);
+    renderMarkdownInto(rendered, repo.readme, repo);
     readmeSection.append(rendered);
     if (repo.readmeTruncated) {
       const trunc = document.createElement('p');
@@ -1042,11 +1045,34 @@ function bindSettingsModal() {
     }
   });
   $('#btn-refresh-all').addEventListener('click', async () => {
+    const button = $('#btn-refresh-all');
+    const status = $('#refresh-all-state');
+    button.disabled = true;
     try {
-      await api('/api/jobs/refresh-all', { method: 'POST' });
-      $('#refresh-all-state').textContent = t('refreshAllStarted');
+      let { job } = await api('/api/jobs/refresh-all', { method: 'POST' });
+      status.textContent = t('refreshAllStarted');
+      while (job.status === 'running') {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        ({ job } = await api(`/api/jobs/${job.id}`));
+        status.textContent = t('refreshAllProgress', job);
+      }
+      status.textContent = t('refreshAllFinished', job);
+      if (job.error) status.textContent += ` ${job.error}`;
+      if (job.failures?.length) {
+        status.textContent += ` ${job.failures.slice(-3).map((f) => `${f.subject}: ${f.code}`).join('; ')}`;
+      }
+      await loadFilters();
+      await runSearch();
+      if (state.selectedRepo) {
+        const { repo } = await api(`/api/repos/${state.selectedRepo.id}`);
+        state.selectedRepo = repo;
+        renderDetail(repo);
+      }
     } catch (err) {
+      status.textContent = err.message;
       toast(err.message);
+    } finally {
+      button.disabled = false;
     }
   });
 }
@@ -1116,6 +1142,13 @@ function init() {
   bindImportModal();
   bindSettingsModal();
   loadFilters().then(() => runSearch());
+  // Pick up background refreshes without disturbing edits in the detail pane.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) runSearch();
+  });
+  setInterval(() => {
+    if (!document.hidden && state.tab === 'library' && !document.querySelector('dialog[open]')) runSearch();
+  }, 60_000);
   api('/api/settings')
     .then((data) => { state.discover = data?.features?.discover === true; })
     .catch(() => { state.discover = false; })

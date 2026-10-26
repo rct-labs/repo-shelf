@@ -19,6 +19,7 @@ public sealed class JobManager
     private readonly RepoService _repos;
     private readonly int _maxRateLimitWaitMs;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _running = new();
+    public bool IsBusy => !_running.IsEmpty;
 
     public JobManager(Store store, GitHubClient gh, RepoService repos, int maxRateLimitWaitMs = 90_000)
     {
